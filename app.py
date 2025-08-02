@@ -69,4 +69,18 @@ st.markdown(f"""
 # --- Footer ---
 st.markdown("---")
 st.markdown("🔄 Currency rate uses fallback of $1 = R18.50")
-st.markdown("Built with ❤️ by Stoic Capital")
+st.markdown("Built by Stoic Capital")
+st.markdown("---")
+st.markdown("### 📲 Connect with Stoic Capital")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown(
+        "[![Twitter](https://img.shields.io/badge/Twitter-%231DA1F2.svg?style=for-the-badge&logo=twitter&logoColor=white)](https://x.com/Stoiccapital)"
+    )
+
+with col2:
+    st.markdown(
+        "[![YouTube](https://img.shields.io/badge/YouTube-%23FF0000.svg?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/@stoiccapital)"
+    )
