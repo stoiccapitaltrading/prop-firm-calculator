@@ -3,54 +3,36 @@ import requests
 
 st.set_page_config(page_title="Prop Firm Calculator by Stoic Capital", layout="centered")
 
-# --- Fetch live exchange rate ---
-def get_live_usd_to_zar():
+# -------------------------------
+# LIVE EXCHANGE RATES (CACHED)
+# -------------------------------
+@st.cache_data(ttl=3600)  # cache for 1 hour
+def get_exchange_rates():
     try:
-        response = requests.get("https://currencyapi.net/api/v1/rates?key=c042df95a522768305ea279162e079b3e608&base=USD&currencies=ZAR")
+        url = "https://v6.exchangerate-api.com/v6/c042df95a522768305ea279162e079b3e608/latest/USD"
+        response = requests.get(url, timeout=10)
         data = response.json()
-        rate = data["rates"]["ZAR"]
-        return rate
-    except Exception as e:
-        st.error("⚠️ Could not fetch live exchange rate — using fallback.")
-        return 18.50  # fallback
 
-usd_to_zar = get_live_usd_to_zar()
+        if data["result"] != "success":
+            raise ValueError("API error")
 
-# --- Custom CSS for Styling ---
-st.markdown("""
-    <style>
-        .main {
-            background-color: #1E1E2F;
-            color: white;
-            font-family: 'Segoe UI', sans-serif;
-        }
-        h1, h2, h3 {
-            color: #FFB703;
-        }
-        .stButton>button {
-            background-color: #219EBC;
-            color: white;
-            border-radius: 12px;
-            padding: 10px 20px;
-            font-size: 16px;
-        }
-        .stTextInput>div>div>input, .stNumberInput>div>div>input {
-            border-radius: 8px;
-            padding: 10px;
-            font-size: 16px;
-        }
-        .result-box {
-            background-color: #073B4C;
-            padding: 20px;
-            border-radius: 15px;
-            margin-top: 30px;
-        }
-    </style>
-""", unsafe_allow_html=True)
+        return data["conversion_rates"]
 
+    except Exception:
+        return {
+            "ZAR": 18.50,
+            "EUR": 0.92,
+            "GBP": 0.78
+        }
+
+rates = get_exchange_rates()
+
+# -------------------------------
+# UI
+# -------------------------------
 st.title("📊 Prop Firm Calculator")
 st.subheader("by Stoic Capital")
-st.markdown("Calculate your payouts in USD and ZAR based on your account size and profit target.")
+st.markdown("Calculate your payouts in USD and your selected currency using **live exchange rates**.")
 
 col1, col2 = st.columns(2)
 with col1:
@@ -60,21 +42,41 @@ with col2:
 
 profit_split = st.slider("🤝 Profit Split (%)", min_value=50, max_value=100, value=80)
 
-# --- Calculation ---
+# -------------------------------
+# Currency Selector
+# -------------------------------
+available_currencies = sorted(rates.keys())
+selected_currency = st.selectbox(
+    "🌍 Select Payout Currency",
+    available_currencies,
+    index=available_currencies.index("ZAR") if "ZAR" in available_currencies else 0
+)
+
+exchange_rate = rates[selected_currency]
+
+# -------------------------------
+# CALCULATIONS
+# -------------------------------
 total_profit = (account_size * profit_percent) / 100
 trader_share = total_profit * (profit_split / 100)
-zar_amount = trader_share * usd_to_zar
+converted_amount = trader_share * exchange_rate
 
-# --- Result Box ---
+# -------------------------------
+# RESULTS
+# -------------------------------
 st.markdown(f"""
-<div class="result-box">
+<div style="background-color:#073B4C;padding:20px;border-radius:15px;margin-top:30px">
     <h3>💰 Results</h3>
     <p>Total Profit (USD): <strong>${total_profit:,.2f}</strong></p>
     <p>Your Share ({profit_split}%): <strong>${trader_share:,.2f}</strong></p>
-    <p>Live Estimated ZAR Payout (Rate: {usd_to_zar:.4f}): <strong>R{zar_amount:,.2f}</strong></p>
+    <p>Payout in {selected_currency} (Rate: {exchange_rate:.4f}): 
+       <strong>{converted_amount:,.2f} {selected_currency}</strong></p>
 </div>
 """, unsafe_allow_html=True)
 
+# -------------------------------
+# FOOTER
+# -------------------------------
 st.markdown("---")
-st.markdown("Built by Stoic Capital")
-
+st.caption("🔄 Live exchange rates updated hourly • Fallback used if API fails")
+st.caption("Built by Stoic Capital")
