@@ -6,7 +6,7 @@ st.set_page_config(page_title="Prop Firm Calculator by Stoic Capital", layout="c
 # --- Fetch live exchange rate ---
 def get_live_usd_to_zar():
     try:
-        response = requests.get("https://currencyapi.net/api/v1/rates?key=YOUR_API_KEY&base=USD&currencies=ZAR")
+        response = requests.get("https://currencyapi.net/api/v1/rates?key=c042df95a522768305ea279162e079b3e608&base=USD&currencies=ZAR")
         data = response.json()
         rate = data["rates"]["ZAR"]
         return rate
@@ -77,3 +77,4 @@ st.markdown(f"""
 
 st.markdown("---")
 st.markdown("Built by Stoic Capital")
+
