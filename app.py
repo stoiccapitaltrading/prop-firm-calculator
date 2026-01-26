@@ -1,9 +1,20 @@
 import streamlit as st
-
-# Currency conversion (placeholder if API isn't working)
-usd_to_zar = 18.50  # fallback rate
+import requests
 
 st.set_page_config(page_title="Prop Firm Calculator by Stoic Capital", layout="centered")
+
+# --- Fetch live exchange rate ---
+def get_live_usd_to_zar():
+    try:
+        response = requests.get("https://currencyapi.net/api/v1/rates?key=YOUR_API_KEY&base=USD&currencies=ZAR")
+        data = response.json()
+        rate = data["rates"]["ZAR"]
+        return rate
+    except Exception as e:
+        st.error("⚠️ Could not fetch live exchange rate — using fallback.")
+        return 18.50  # fallback
+
+usd_to_zar = get_live_usd_to_zar()
 
 # --- Custom CSS for Styling ---
 st.markdown("""
@@ -37,12 +48,10 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- Title ---
 st.title("📊 Prop Firm Calculator")
 st.subheader("by Stoic Capital")
 st.markdown("Calculate your payouts in USD and ZAR based on your account size and profit target.")
 
-# --- Input Section ---
 col1, col2 = st.columns(2)
 with col1:
     account_size = st.number_input("💼 Account Size (USD)", min_value=0, step=1000)
@@ -62,24 +71,9 @@ st.markdown(f"""
     <h3>💰 Results</h3>
     <p>Total Profit (USD): <strong>${total_profit:,.2f}</strong></p>
     <p>Your Share ({profit_split}%): <strong>${trader_share:,.2f}</strong></p>
-    <p>Estimated ZAR Payout: <strong>R{zar_amount:,.2f}</strong></p>
+    <p>Live Estimated ZAR Payout (Rate: {usd_to_zar:.4f}): <strong>R{zar_amount:,.2f}</strong></p>
 </div>
 """, unsafe_allow_html=True)
 
-# --- Footer ---
 st.markdown("---")
-st.markdown("🔄 Currency rate uses fallback of $1 = R18.50")
 st.markdown("Built by Stoic Capital")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown(
-        "[![Twitter](https://img.shields.io/badge/Twitter-%231DA1F2.svg?style=for-the-badge&logo=twitter&logoColor=white)](https://x.com/Stoiccapital)"
-    )
-
-with col2:
-    st.markdown(
-        "[![YouTube](https://img.shields.io/badge/YouTube-%23FF0000.svg?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/@stoiccapital)"
-    )
-
