@@ -18,12 +18,7 @@ def get_exchange_rates():
 
         return data["conversion_rates"]
 
-    except Exception:
-        return {
-            "ZAR": 18.50,
-            "EUR": 0.92,
-            "GBP": 0.78
-        }
+
 
 rates = get_exchange_rates()
 
@@ -80,3 +75,4 @@ st.markdown(f"""
 st.markdown("---")
 st.caption("🔄 Live exchange rates updated hourly • Fallback used if API fails")
 st.caption("Built by Stoic Capital")
+
