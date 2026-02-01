@@ -3,27 +3,21 @@ import requests
 
 st.set_page_config(page_title="Prop Firm Calculator by Stoic Capital", layout="centered")
 
-# -------------------------------
-# LIVE EXCHANGE RATES (CACHED)
-# -------------------------------
-@st.cache_data(ttl=3600)  # cache for 1 hour
+@st.cache_data(ttl=3600)
 def get_exchange_rates():
-    url = "https://v6.exchangerate-api.com/v6/c042df95a522768305ea279162e079b3e608/latest/USD"
+    url = "https://open.er-api.com/v6/latest/USD"  # no key required
     response = requests.get(url, timeout=10)
     data = response.json()
 
-    # If API fails, raise a clear error (don't silently fall back to only 3 currencies)
-    if data.get("result") != "success" or "conversion_rates" not in data:
+    if data.get("result") != "success" or "rates" not in data:
         raise ValueError(f"Exchange rate API failed: {data}")
 
-    return data["conversion_rates"]
+    return data["rates"]
 
-# Load rates (with a helpful error message if the API is not returning data)
 try:
     rates = get_exchange_rates()
 except Exception as e:
     st.error(f"Could not load live exchange rates. Error: {e}")
-    # Fallback: keep the app usable, but include more currencies than 3
     rates = {
         "USD": 1.0,
         "ZAR": 18.50,
@@ -36,12 +30,8 @@ except Exception as e:
         "NZD": 1.65,
     }
 
-# Debug: shows how many currencies you actually loaded
 st.caption(f"✅ Currencies loaded: {len(rates)}")
 
-# -------------------------------
-# UI
-# -------------------------------
 st.title("📊 Prop Firm Calculator")
 st.subheader("by Stoic Capital")
 st.markdown("Calculate your payouts in USD and your selected currency using **live exchange rates**.")
@@ -54,9 +44,6 @@ with col2:
 
 profit_split = st.slider("🤝 Profit Split (%)", min_value=50, max_value=100, value=80)
 
-# -------------------------------
-# Currency Selector (ALL currencies returned by API)
-# -------------------------------
 available_currencies = sorted(rates.keys())
 selected_currency = st.selectbox(
     "🌍 Select Payout Currency",
@@ -66,16 +53,10 @@ selected_currency = st.selectbox(
 
 exchange_rate = float(rates[selected_currency])
 
-# -------------------------------
-# CALCULATIONS
-# -------------------------------
 total_profit = (account_size * profit_percent) / 100
 trader_share = total_profit * (profit_split / 100)
 converted_amount = trader_share * exchange_rate
 
-# -------------------------------
-# RESULTS
-# -------------------------------
 st.markdown(
     f"""
 <div style="background-color:#073B4C;padding:20px;border-radius:15px;margin-top:30px">
@@ -89,9 +70,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# -------------------------------
-# FOOTER
-# -------------------------------
 st.markdown("---")
-st.caption("🔄 Live exchange rates updated hourly • If API fails, app shows an error and uses a larger fallback set")
+st.caption("🔄 Live exchange rates updated hourly • Fallback used if API fails")
 st.caption("Built by Stoic Capital")
+
