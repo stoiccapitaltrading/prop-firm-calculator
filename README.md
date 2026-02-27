@@ -17,7 +17,7 @@ Unresolved markers like `<<<<<<<`, `=======`, `>>>>>>>` should never be committe
 ./scripts/check_conflict_markers.sh
 ```
 
-After setup, the pre-commit hook runs automatically and rejects commits that contain conflict markers.
+After setup, both pre-commit and pre-push hooks run automatically and reject changes that contain conflict markers.
 
 ### CI protection
 A GitHub Actions workflow also runs this check on every PR/push and fails if conflict markers are present.
