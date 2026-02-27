@@ -6,7 +6,6 @@ import random
 
 
  main
- main
 import streamlit as st
 
 st.set_page_config(page_title="Risk of Ruin Calculator", layout="centered")
