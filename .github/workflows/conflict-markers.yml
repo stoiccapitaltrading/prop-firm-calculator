@@ -1,0 +1,23 @@
+name: Block merge-conflict markers
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  check-conflict-markers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for merge conflict markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -nE '^(<<<<<<<|=======|>>>>>>>)' -- .; then
+            echo "❌ Unresolved merge conflict markers found."
+            exit 1
+          fi
+          echo "✅ No merge conflict markers found."
