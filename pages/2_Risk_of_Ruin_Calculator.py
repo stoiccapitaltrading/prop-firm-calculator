@@ -3,7 +3,7 @@ import random
 
 
 import random
- codex/fix-risk-of-ruin-page-issue-4hzh5f
+codex/fix-risk-of-ruin-page-issue-4hzh5f
 
 
  main
