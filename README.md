@@ -4,11 +4,17 @@ A Streamlit app for prop firm traders with:
 - **Payout Calculator** (main page)
 - **Risk of Ruin Calculator** for a prop firm rule model (daily + overall drawdown)
 
-## Quick check before commit
-If Git says your file has conflict placeholders like `<<<<<<<`, `=======`, `>>>>>>>`, run:
+## Block merge-conflict markers from commits
+Unresolved markers like `<<<<<<<`, `=======`, `>>>>>>>` should never be committed.
 
+### One-time setup
+```bash
+./scripts/install_git_hooks.sh
+```
+
+### Manual check (optional)
 ```bash
 ./scripts/check_conflict_markers.sh
 ```
 
-This will fail fast if unresolved merge conflict markers exist anywhere in the repo.
+After setup, the pre-commit hook runs automatically and rejects commits that contain conflict markers.
