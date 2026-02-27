@@ -15,17 +15,24 @@ A run is marked **ruined** if it breaches either:
 """
 )
 
+codex/fix-risk-of-ruin-page-issue-iyl7gn
 challenge_type = st.radio(
     "Challenge Type",
     options=["1-Phase Challenge", "2-Phase Challenge"],
     horizontal=True,
 )
 
+
+ main
 col1, col2 = st.columns(2)
 with col1:
     starting_balance = st.number_input("Starting Balance ($)", min_value=1000, value=100000, step=1000)
     daily_drawdown_pct = st.number_input("Daily Drawdown Limit (%)", min_value=0.1, max_value=20.0, value=5.0, step=0.1)
     overall_drawdown_pct = st.number_input("Overall Drawdown Limit (%)", min_value=0.1, max_value=30.0, value=10.0, step=0.1)
+ codex/fix-risk-of-ruin-page-issue-iyl7gn
+
+    target_profit_pct = st.number_input("Target Profit (%)", min_value=0.1, max_value=100.0, value=8.0, step=0.1)
+ main
 
 with col2:
     win_rate_pct = st.number_input("Win Rate (%)", min_value=1.0, max_value=99.0, value=50.0, step=1.0)
@@ -33,6 +40,7 @@ with col2:
     risk_per_trade_pct = st.number_input("Risk Per Trade (% of balance)", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
     trades_per_day = st.number_input("Trades Per Day", min_value=1, max_value=20, value=3, step=1)
 
+codex/fix-risk-of-ruin-page-issue-iyl7gn
 if challenge_type == "1-Phase Challenge":
     target_phase_1_pct = st.number_input("Phase 1 Target Profit (%)", min_value=0.1, max_value=100.0, value=8.0, step=0.1)
     target_phase_2_pct = 0.0
@@ -43,14 +51,23 @@ else:
     with phase_col2:
         target_phase_2_pct = st.number_input("Phase 2 Target Profit (%)", min_value=0.1, max_value=100.0, value=5.0, step=0.1)
 
+
+ main
 sim_col1, sim_col2 = st.columns(2)
 with sim_col1:
     simulation_runs = st.slider("Simulation Runs", min_value=100, max_value=10000, value=2000, step=100)
 with sim_col2:
+codex/fix-risk-of-ruin-page-issue-iyl7gn
     max_days_per_phase = st.slider("Max Trading Days (per phase)", min_value=5, max_value=180, value=30)
 
 
 def simulate_phase(target_profit_pct: float) -> tuple[bool, bool, float]:
+
+    max_days = st.slider("Max Trading Days", min_value=5, max_value=180, value=30)
+
+
+def simulate_path() -> tuple[bool, bool, int, float]:
+main
     balance = float(starting_balance)
     initial_balance = float(starting_balance)
     target_balance = initial_balance * (1 + target_profit_pct / 100)
@@ -59,12 +76,17 @@ def simulate_phase(target_profit_pct: float) -> tuple[bool, bool, float]:
     win_prob = win_rate_pct / 100
     risk_fraction = risk_per_trade_pct / 100
 
+ codex/fix-risk-of-ruin-page-issue-iyl7gn
     for _day in range(1, max_days_per_phase + 1):
+
+    for day in range(1, max_days + 1):
+ main
         day_start_balance = balance
         daily_floor = day_start_balance * (1 - daily_drawdown_pct / 100)
 
         for _ in range(int(trades_per_day)):
             risk_amount = balance * risk_fraction
+ codex/fix-risk-of-ruin-page-issue-iyl7gn
             pnl = (risk_amount * reward_risk) if random.random() <= win_prob else -risk_amount
             balance += pnl
 
@@ -99,9 +121,26 @@ def simulate_challenge() -> tuple[bool, bool, bool, float]:
 
     return False, False, True, phase_2_end_balance
 
+            if random.random() <= win_prob:
+                pnl = risk_amount * reward_risk
+            else:
+                pnl = -risk_amount
+
+            balance += pnl
+
+            if balance <= overall_floor or balance <= daily_floor:
+                return True, False, day, balance
+
+            if balance >= target_balance:
+                return False, True, day, balance
+
+    return False, False, max_days, balance
+main
+
 
 if st.button("Run Simulation", type="primary"):
     ruined = 0
+codex/fix-risk-of-ruin-page-issue-iyl7gn
     passed_challenge = 0
     reached_phase_2 = 0
     ending_balances = []
@@ -115,12 +154,26 @@ if st.button("Run Simulation", type="primary"):
 
     ruin_probability = ruined / simulation_runs
     pass_probability = passed_challenge / simulation_runs
+
+    hit_target = 0
+    ending_balances = []
+
+    for _ in range(simulation_runs):
+        is_ruined, reached_target, _, final_balance = simulate_path()
+        ruined += int(is_ruined)
+        hit_target += int(reached_target)
+        ending_balances.append(final_balance)
+
+    ruin_probability = ruined / simulation_runs
+    target_probability = hit_target / simulation_runs
+main
     survival_probability = 1 - ruin_probability
     avg_ending_balance = sum(ending_balances) / len(ending_balances)
 
     st.subheader("Results")
     m1, m2, m3 = st.columns(3)
     m1.metric("Risk of Ruin", f"{ruin_probability:.2%}")
+codex/fix-risk-of-ruin-page-issue-iyl7gn
     m2.metric("Chance to Pass Challenge", f"{pass_probability:.2%}")
     m3.metric("Survival Rate", f"{survival_probability:.2%}")
 
@@ -131,3 +184,13 @@ if st.button("Run Simulation", type="primary"):
     st.metric("Average Ending Balance", f"${avg_ending_balance:,.2f}")
 
     st.info("Tip: Lower risk per trade and/or reduce trades per day to lower your risk of ruin.")
+
+    m2.metric("Chance to Hit Target", f"{target_probability:.2%}")
+    m3.metric("Survival Rate", f"{survival_probability:.2%}")
+
+    st.metric("Average Ending Balance", f"${avg_ending_balance:,.2f}")
+
+    st.info(
+        "Tip: Lower risk per trade and/or reduce trades per day to dramatically lower your risk of ruin."
+    )
+main
