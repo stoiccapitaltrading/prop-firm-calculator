@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-./scripts/check_conflict_markers.sh
