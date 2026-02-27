@@ -1,4 +1,3 @@
- codex/fix-risk-of-ruin-page-issue-28bv7m
 # -*- coding: utf-8 -*-
 import random
 
