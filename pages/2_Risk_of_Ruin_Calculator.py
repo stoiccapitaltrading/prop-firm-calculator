@@ -3,7 +3,6 @@ import random
 
 
 import random
-codex/fix-risk-of-ruin-page-issue-4hzh5f
 
 
  main
@@ -12,7 +11,6 @@ import streamlit as st
 
 st.set_page_config(page_title="Risk of Ruin Calculator", layout="centered")
 
- codex/fix-risk-of-ruin-page-issue-28bv7m
 st.title("Risk of Ruin Calculator")
 st.caption("Estimate the chance of violating prop-firm drawdown rules.")
 
@@ -26,7 +24,6 @@ A run is marked as **ruined** if it breaches either:
 )
 
 
- codex/fix-risk-of-ruin-page-issue-4hzh5f
 st.title("Risk of Ruin Calculator")
 
 st.title("⚠️ Risk of Ruin Calculator")
@@ -42,7 +39,6 @@ A run is marked **ruined** if it breaches either:
 """
 )
 
- codex/fix-risk-of-ruin-page-issue-4hzh5f
 
 codex/fix-risk-of-ruin-page-issue-iyl7gn
  main
@@ -53,17 +49,14 @@ challenge_type = st.radio(
     horizontal=True,
 )
 
- codex/fix-risk-of-ruin-page-issue-28bv7m
 preset_targets = {
 
- codex/fix-risk-of-ruin-page-issue-4hzh5f
 phase_presets = {
  main
     "1-Phase Challenge": {"phase_1": 8.0, "phase_2": 0.0},
     "2-Phase Challenge": {"phase_1": 8.0, "phase_2": 5.0},
 }
 
- codex/fix-risk-of-ruin-page-issue-28bv7m
 use_presets = st.checkbox("Use default target presets", value=True)
 selected_preset = preset_targets[challenge_type]
 
@@ -114,7 +107,6 @@ with col2:
     risk_per_trade_pct = st.number_input("Risk Per Trade (% of balance)", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
     trades_per_day = st.number_input("Trades Per Day", min_value=1, max_value=20, value=3, step=1)
 
- codex/fix-risk-of-ruin-page-issue-4hzh5f
 phase_col1, phase_col2 = st.columns(2)
 with phase_col1:
  main
