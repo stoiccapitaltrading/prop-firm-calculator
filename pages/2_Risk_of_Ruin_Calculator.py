@@ -1,4 +1,4 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+(cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
 diff --git a/pages/2_Risk_of_Ruin_Calculator.py b/pages/2_Risk_of_Ruin_Calculator.py
 new file mode 100644
 index 0000000000000000000000000000000000000000..4f8b2ec79ac56d8246fb34e4b91903eac3b72d6f
