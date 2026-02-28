@@ -79,11 +79,19 @@ with left_col:
 with right_col:
     win_rate_pct = st.number_input(
         "Win Rate (%)",
-        min_value=1.0,
-        max_value=99.0,
+        min_value=0.0,
+        max_value=100.0,
         value=50.0,
         step=1.0,
         key="win_rate_pct",
+    )
+    breakeven_rate_pct = st.number_input(
+        "Breakeven Rate (%)",
+        min_value=0.0,
+        max_value=100.0,
+        value=0.0,
+        step=1.0,
+        key="breakeven_rate_pct",
     )
     reward_risk = st.number_input(
         "Average Reward/Risk (R)",
@@ -110,6 +118,18 @@ with right_col:
         key="trades_per_day",
     )
 
+# Validate rates
+if win_rate_pct + breakeven_rate_pct > 100:
+    st.error("Win Rate + Breakeven Rate cannot exceed 100%. Reduce one of them.")
+    st.stop()
+
+loss_rate_pct = 100.0 - win_rate_pct - breakeven_rate_pct
+
+st.caption(
+    f"Implied Loss Rate: **{loss_rate_pct:.1f}%** "
+    f"(Win {win_rate_pct:.1f}% / BE {breakeven_rate_pct:.1f}% / Loss {loss_rate_pct:.1f}%)"
+)
+
 st.markdown("### Challenge Targets & Simulation")
 
 # Phase 1 is always shown
@@ -128,7 +148,7 @@ with c1:
         key="target_phase_1_pct",
     )
 
-# Phase 2 is ONLY shown in 2-Phase mode (completely hidden otherwise)
+# Phase 2 is ONLY shown in 2-Phase mode (hidden otherwise)
 if challenge_type == "2-Phase Challenge":
     with c2:
         target_phase_2_pct = st.number_input(
@@ -171,6 +191,11 @@ def simulate_phase(target_profit_pct: float) -> tuple[bool, bool, float, int]:
       passed (bool),
       ending_balance (float),
       days_used (int)
+
+    Trade outcomes:
+      - Win: +R
+      - Breakeven: 0
+      - Loss: -1R
     """
     balance = float(starting_balance)
     initial_balance = float(starting_balance)
@@ -179,6 +204,9 @@ def simulate_phase(target_profit_pct: float) -> tuple[bool, bool, float, int]:
     overall_floor = initial_balance * (1.0 - float(overall_drawdown_pct) / 100.0)
 
     win_prob = float(win_rate_pct) / 100.0
+    be_prob = float(breakeven_rate_pct) / 100.0
+    loss_prob = 1.0 - win_prob - be_prob  # implied
+
     risk_fraction = float(risk_per_trade_pct) / 100.0
 
     for day in range(1, int(max_days_per_phase) + 1):
@@ -187,7 +215,15 @@ def simulate_phase(target_profit_pct: float) -> tuple[bool, bool, float, int]:
 
         for _ in range(int(trades_per_day)):
             risk_amount = balance * risk_fraction
-            pnl = (risk_amount * float(reward_risk)) if (random.random() <= win_prob) else (-risk_amount)
+            r = random.random()
+
+            if r <= win_prob:
+                pnl = risk_amount * float(reward_risk)
+            elif r <= win_prob + be_prob:
+                pnl = 0.0
+            else:
+                pnl = -risk_amount  # loss
+
             balance += pnl
 
             # Ruin check (either rule breached)
