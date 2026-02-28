@@ -36,26 +36,13 @@ A run is marked as **ruined** if it breaches either:
 )
 
 # ---------------------------
-# Challenge selection + presets
+# Challenge selection
 # ---------------------------
 challenge_type = st.radio(
     "Challenge Type",
     options=["1-Phase Challenge", "2-Phase Challenge"],
     horizontal=True,
     key="challenge_type",
-)
-
-preset_targets = {
-    "1-Phase Challenge": {"phase_1": 8.0, "phase_2": 0.0},
-    "2-Phase Challenge": {"phase_1": 8.0, "phase_2": 5.0},
-}
-
-selected_preset = preset_targets[challenge_type]
-
-use_presets = st.toggle(
-    "Use default target presets",
-    value=True,
-    key="use_presets_toggle",
 )
 
 # ---------------------------
@@ -124,31 +111,36 @@ with right_col:
     )
 
 st.markdown("### Challenge Targets & Simulation")
-c1, c2, c3, c4 = st.columns(4)
+
+# Phase 1 is always shown
+if challenge_type == "2-Phase Challenge":
+    c1, c2, c3, c4 = st.columns(4)
+else:
+    c1, c3, c4 = st.columns(3)
 
 with c1:
     target_phase_1_pct = st.number_input(
         "Phase 1 Target Profit (%)",
         min_value=0.1,
         max_value=100.0,
-        value=float(selected_preset["phase_1"]) if use_presets else 8.0,
+        value=8.0,
         step=0.1,
         key="target_phase_1_pct",
     )
 
-with c2:
-    if challenge_type == "2-Phase Challenge":
+# Phase 2 is ONLY shown in 2-Phase mode (completely hidden otherwise)
+if challenge_type == "2-Phase Challenge":
+    with c2:
         target_phase_2_pct = st.number_input(
             "Phase 2 Target Profit (%)",
             min_value=0.1,
             max_value=100.0,
-            value=float(selected_preset["phase_2"]) if use_presets else 5.0,
+            value=5.0,
             step=0.1,
             key="target_phase_2_pct",
         )
-    else:
-        target_phase_2_pct = 0.0
-        st.caption("Phase 2 is not used in 1-Phase mode.")
+else:
+    target_phase_2_pct = 0.0  # not used
 
 with c3:
     simulation_runs = st.slider(
@@ -184,7 +176,7 @@ def simulate_phase(target_profit_pct: float) -> tuple[bool, bool, float, int]:
     initial_balance = float(starting_balance)
 
     target_balance = initial_balance * (1.0 + target_profit_pct / 100.0)
-    overall_floor = initial_balance * (1.0 - overall_drawdown_pct / 100.0)
+    overall_floor = initial_balance * (1.0 - float(overall_drawdown_pct) / 100.0)
 
     win_prob = float(win_rate_pct) / 100.0
     risk_fraction = float(risk_per_trade_pct) / 100.0
@@ -232,7 +224,7 @@ def simulate_challenge() -> tuple[bool, bool, bool, float, int | None, int]:
     if challenge_type == "1-Phase Challenge":
         return False, True, False, bal_after_p1, p1_days, p1_days
 
-    # Phase 2
+    # Phase 2 (only for 2-phase)
     ruined, phase_2_passed, bal_after_p2, p2_days = simulate_phase(target_phase_2_pct)
     total_days = p1_days + p2_days
 
