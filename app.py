@@ -70,8 +70,7 @@ except Exception as e:
         "NZD": 1.65,
     }
 
-st.markdown('<div class="main-title">📈 Prop Firm Profits Calculator</div>', unsafe_allow_html=True)
-st.markdown('<div class="main-title">📈 Profit Calculator</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">📈 Prop Firm Payout Calculator</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">by Stoic Capital</div>', unsafe_allow_html=True)
 st.markdown("Calculate your payouts in USD and your selected currency using **live exchange rates**.")
 
