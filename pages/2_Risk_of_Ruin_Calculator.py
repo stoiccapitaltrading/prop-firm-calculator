@@ -81,7 +81,6 @@ with col4:
         step=0.1,
     )
 
-with phase_col_2:
 with col5:
     if challenge_type == "2-Phase Challenge":
         target_phase_2_pct = st.number_input(
@@ -120,7 +119,6 @@ def simulate_phase(target_profit_pct: float):
     win_prob = win_rate_pct / 100.0
     risk_fraction = risk_per_trade_pct / 100.0
 
-    for _ in range(int(max_days_per_phase)):
     for day in range(1, int(max_days_per_phase) + 1):
         day_start_balance = balance
         daily_floor = day_start_balance * (1.0 - daily_drawdown_pct / 100.0)
@@ -164,15 +162,6 @@ def simulate_challenge():
         return False, True, True, balance_after_phase_2
 
     return False, False, True, balance_after_phase_2
-            pnl = risk_amount * reward_risk if random.random() <= win_prob else -risk_amount
-            balance += pnl
-
-            if balance <= overall_floor or balance <= daily_floor:
-                return True, False, balance, day
-
-            if balance >= target_balance:
-                return False, True, balance, day
-
     return False, False, balance, int(max_days_per_phase)
 
 
