@@ -2,6 +2,7 @@ import requests
 import streamlit as st
 
 st.set_page_config(page_title="Prop Firm Profits Calculator by Stoic Capital", layout="centered")
+st.set_page_config(page_title="Profit Calculator by Stoic Capital", layout="centered")
 
 st.markdown(
     """
@@ -70,8 +71,9 @@ except Exception as e:
         "NZD": 1.65,
     }
 
-st.markdown('<div class="main-title">📈 Payout Calculator</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">Prop Firm Profits • by Stoic Capital</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">📈 Prop Firm Profits Calculator</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">📈 Profit Calculator</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">by Stoic Capital</div>', unsafe_allow_html=True)
 st.markdown("Calculate your payouts in USD and your selected currency using **live exchange rates**.")
 
 col1, col2 = st.columns(2)
