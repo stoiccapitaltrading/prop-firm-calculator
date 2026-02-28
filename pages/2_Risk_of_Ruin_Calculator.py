@@ -246,3 +246,4 @@ if st.button("Run Simulation", type="primary"):
 
     st.info("Tip: Lower risk per trade and/or fewer trades per day usually lowers ruin risk.")
 
+
