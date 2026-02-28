@@ -1,0 +1,9 @@
+[[pages]]
+path = "app.py"
+name = "Prop Firm Profits Calculator"
+icon = "💰"
+
+[[pages]]
+path = "pages/2_Risk_of_Ruin_Calculator.py"
+name = "Risk of Ruin Calculator"
+icon = "⚠️"
