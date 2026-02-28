@@ -55,8 +55,8 @@ with right_col:
 
 phase_col_1, phase_col_2 = st.columns(2)
 with phase_col_1:
-use_presets = st.toggle("Use default target presets", value=True)
-selected_preset = preset_targets[challenge_type]
+    use_presets = st.toggle("Use default target presets", value=True)
+    selected_preset = preset_targets[challenge_type]
 
 st.markdown("### Account & Risk Profile")
 col1, col2, col3 = st.columns(3)
