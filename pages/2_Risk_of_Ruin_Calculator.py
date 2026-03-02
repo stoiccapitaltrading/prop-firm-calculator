@@ -78,28 +78,52 @@ with left_col:
 
 with right_col:
     win_rate_pct = st.number_input(
-        "Win Rate (%)",
+        "Full Win Rate (%)",
         min_value=0.0,
         max_value=100.0,
         value=50.0,
-        step=1.0,
+        step=0.01,
+        format="%.2f",
         key="win_rate_pct",
+    )
+    partial_win_rate_pct = st.number_input(
+        "Partial Win Rate (%)",
+        min_value=0.0,
+        max_value=100.0,
+        value=0.0,
+        step=0.01,
+        format="%.2f",
+        key="partial_win_rate_pct",
+        help="Trades that close in profit but below your full target R (e.g. early exits, runners).",
+    )
+    partial_win_r = st.number_input(
+        "Partial Win Avg R",
+        min_value=0.01,
+        max_value=10.0,
+        value=0.5,
+        step=0.01,
+        format="%.2f",
+        key="partial_win_r",
+        help="Average R earned on partial win trades.",
     )
     breakeven_rate_pct = st.number_input(
         "Breakeven Rate (%)",
         min_value=0.0,
         max_value=100.0,
         value=0.0,
-        step=1.0,
+        step=0.01,
+        format="%.2f",
         key="breakeven_rate_pct",
     )
     reward_risk = st.number_input(
-        "Average Reward/Risk (R)",
+        "Full Win Avg R",
         min_value=0.1,
         max_value=10.0,
         value=1.5,
-        step=0.1,
+        step=0.01,
+        format="%.2f",
         key="reward_risk",
+        help="Average R earned on full win trades.",
     )
     risk_per_trade_pct = st.number_input(
         "Risk Per Trade (% of balance)",
@@ -119,15 +143,26 @@ with right_col:
     )
 
 # Validate rates
-if win_rate_pct + breakeven_rate_pct > 100:
-    st.error("Win Rate + Breakeven Rate cannot exceed 100%. Reduce one of them.")
+total_non_loss = win_rate_pct + partial_win_rate_pct + breakeven_rate_pct
+if total_non_loss > 100:
+    st.error("Full Win % + Partial Win % + Breakeven % cannot exceed 100%. Reduce one of them.")
     st.stop()
 
-loss_rate_pct = 100.0 - win_rate_pct - breakeven_rate_pct
+loss_rate_pct = 100.0 - total_non_loss
+
+# Expected value display
+ev = (
+    (win_rate_pct / 100.0) * float(reward_risk)
+    + (partial_win_rate_pct / 100.0) * float(partial_win_r)
+    - (loss_rate_pct / 100.0) * 1.0
+)
 
 st.caption(
-    f"Implied Loss Rate: **{loss_rate_pct:.1f}%** "
-    f"(Win {win_rate_pct:.1f}% / BE {breakeven_rate_pct:.1f}% / Loss {loss_rate_pct:.1f}%)"
+    f"Outcome split — Full Win: **{win_rate_pct:.2f}%** @ +{reward_risk:.2f}R | "
+    f"Partial Win: **{partial_win_rate_pct:.2f}%** @ +{partial_win_r:.2f}R | "
+    f"BE: **{breakeven_rate_pct:.2f}%** | "
+    f"Loss: **{loss_rate_pct:.2f}%** @ -1R &nbsp;|&nbsp; "
+    f"Expected Value per trade: **{ev:+.4f}R**"
 )
 
 st.markdown("### Challenge Targets & Simulation")
@@ -222,8 +257,15 @@ def simulate_phase(target_profit_pct: float, use_trailing: bool = False) -> tupl
     # Trailing stop: track the highest EOD balance seen
     peak_balance = initial_balance
 
-    win_prob = float(win_rate_pct) / 100.0
-    be_prob = float(breakeven_rate_pct) / 100.0
+    win_prob         = float(win_rate_pct) / 100.0
+    partial_win_prob = float(partial_win_rate_pct) / 100.0
+    be_prob          = float(breakeven_rate_pct) / 100.0
+    # loss_prob is the remainder — no variable needed, handled by else
+
+    # Cumulative thresholds for a single random draw
+    thresh_win         = win_prob
+    thresh_partial_win = win_prob + partial_win_prob
+    thresh_be          = win_prob + partial_win_prob + be_prob
 
     risk_fraction = float(risk_per_trade_pct) / 100.0
 
@@ -238,13 +280,19 @@ def simulate_phase(target_profit_pct: float, use_trailing: bool = False) -> tupl
             risk_amount = balance * risk_fraction
             r = random.random()
 
-            if r <= win_prob:
+            if r < thresh_win:
+                # Full win
                 pnl = risk_amount * float(reward_risk)
                 current_consec_losses = 0
-            elif r <= win_prob + be_prob:
+            elif r < thresh_partial_win:
+                # Partial win
+                pnl = risk_amount * float(partial_win_r)
+                current_consec_losses = 0
+            elif r < thresh_be:
+                # Breakeven — doesn't reset or extend loss streak
                 pnl = 0.0
-                # breakeven doesn't reset or increment loss streak
             else:
+                # Loss
                 pnl = -risk_amount
                 current_consec_losses += 1
                 if current_consec_losses > max_consec_losses:
