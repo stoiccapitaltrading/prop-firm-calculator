@@ -554,6 +554,8 @@ def render_futures_tab() -> None:
             key="futures_max_days",
         )
 
+    run_futures_simulation = st.button("Run Futures Simulation", type="primary", key="futures_run_sim_button")
+
     def consistency_is_met(total_profit: float, best_day_profit: float) -> bool:
         if not use_consistency_rule:
             return True
@@ -611,7 +613,7 @@ def render_futures_tab() -> None:
         total_profit = balance - initial_balance
         return False, False, balance, int(futures_max_days), total_profit, best_day_profit
 
-    if st.button("Run Futures Simulation", type="primary", key="futures_run_sim_button"):
+    if run_futures_simulation:
         ruined_count = 0
         passed_count = 0
         ending_balances: list[float] = []
