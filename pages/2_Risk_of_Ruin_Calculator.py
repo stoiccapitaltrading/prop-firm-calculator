@@ -522,7 +522,7 @@ def render_futures_tab() -> None:
 
     futures_drawdown_mode = "Trailing" if use_trailing_drawdown else "Static"
     consistency_summary = (
-        f"Consistency: on ({futures_consistency_threshold_pct:.0f}% max one-day contribution)"
+        f"Consistency: on ({consistency_threshold_pct:.0f}% max one-day contribution)"
         if use_consistency_rule
         else "Consistency: off"
     )
