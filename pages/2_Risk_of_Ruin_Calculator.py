@@ -433,11 +433,12 @@ def render_futures_tab() -> None:
             step=0.1,
             key="futures_max_drawdown_pct",
         )
-        use_trailing_drawdown = st.toggle(
-            "Enable Trailing Drawdown",
-            value=True,
-            key="futures_use_trailing_drawdown",
-            help="When enabled, the drawdown floor trails up with each new balance high and never moves back down.",
+        futures_drawdown_mode = st.selectbox(
+            "Drawdown Mode",
+            options=["Static", "Trailing Equity", "Trailing EOD Equity"],
+            index=1,
+            key="futures_drawdown_mode",
+            help="Static keeps the floor fixed. Trailing Equity follows intraday balance highs. Trailing EOD Equity only updates from end-of-day closing highs.",
         )
         use_consistency_rule = st.toggle(
             "Enable Consistency Rule",
@@ -474,6 +475,24 @@ def render_futures_tab() -> None:
             format="%.2f",
             key="futures_avg_win_r",
         )
+        futures_partial_win_rate_pct = st.number_input(
+            "Partial Win Rate (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=0.0,
+            step=0.01,
+            format="%.2f",
+            key="futures_partial_win_rate_pct",
+        )
+        futures_partial_win_r = st.number_input(
+            "Average Partial Win (R)",
+            min_value=0.01,
+            max_value=10.0,
+            value=0.5,
+            step=0.01,
+            format="%.2f",
+            key="futures_partial_win_r",
+        )
         futures_avg_loss_r = st.number_input(
             "Average Loss (R)",
             min_value=0.1,
@@ -509,18 +528,17 @@ def render_futures_tab() -> None:
             key="futures_breakeven_rate_pct",
         )
 
-    futures_non_loss_pct = futures_win_rate_pct + futures_breakeven_rate_pct
+    futures_non_loss_pct = futures_win_rate_pct + futures_partial_win_rate_pct + futures_breakeven_rate_pct
     if futures_non_loss_pct > 100:
-        st.error("Win Rate % + Breakeven Rate % cannot exceed 100%.")
+        st.error("Win Rate % + Partial Win Rate % + Breakeven Rate % cannot exceed 100%.")
         st.stop()
 
     futures_loss_rate_pct = 100.0 - futures_non_loss_pct
     futures_ev = (
         (futures_win_rate_pct / 100.0) * float(futures_avg_win_r)
+        + (futures_partial_win_rate_pct / 100.0) * float(futures_partial_win_r)
         - (futures_loss_rate_pct / 100.0) * float(futures_avg_loss_r)
     )
-
-    futures_drawdown_mode = "Trailing" if use_trailing_drawdown else "Static"
     consistency_summary = (
         f"Consistency: on ({consistency_threshold_pct:.0f}% max one-day contribution)"
         if use_consistency_rule
@@ -572,7 +590,8 @@ def render_futures_tab() -> None:
         peak_balance = initial_balance
 
         win_threshold = float(futures_win_rate_pct) / 100.0
-        breakeven_threshold = win_threshold + float(futures_breakeven_rate_pct) / 100.0
+        partial_win_threshold = win_threshold + float(futures_partial_win_rate_pct) / 100.0
+        breakeven_threshold = partial_win_threshold + float(futures_breakeven_rate_pct) / 100.0
         risk_fraction = float(futures_risk_per_trade_pct) / 100.0
         best_day_profit = 0.0
 
@@ -585,6 +604,8 @@ def render_futures_tab() -> None:
 
                 if outcome < win_threshold:
                     pnl = risk_amount * float(futures_avg_win_r)
+                elif outcome < partial_win_threshold:
+                    pnl = risk_amount * float(futures_partial_win_r)
                 elif outcome < breakeven_threshold:
                     pnl = 0.0
                 else:
@@ -593,7 +614,7 @@ def render_futures_tab() -> None:
                 balance += pnl
                 day_profit += pnl
 
-                if use_trailing_drawdown and balance > peak_balance:
+                if futures_drawdown_mode == "Trailing Equity" and balance > peak_balance:
                     peak_balance = balance
                     trailing_floor = peak_balance - drawdown_amount
                     if trailing_floor > floor_balance:
@@ -605,6 +626,12 @@ def render_futures_tab() -> None:
 
             if day_profit > best_day_profit:
                 best_day_profit = day_profit
+
+            if futures_drawdown_mode == "Trailing EOD Equity" and balance > peak_balance:
+                peak_balance = balance
+                trailing_floor = peak_balance - drawdown_amount
+                if trailing_floor > floor_balance:
+                    floor_balance = trailing_floor
 
             total_profit = balance - initial_balance
             if total_profit >= profit_target and consistency_is_met(total_profit, best_day_profit):
