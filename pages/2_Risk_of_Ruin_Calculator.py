@@ -1,8 +1,3 @@
-Below is the **complete, corrected `2_Risk_of_Ruin_Calculator.py`**.  
-All of the CFD‑related fixes you asked for are included, **and the Futures tab is finished** (the code that was truncated in the previous reply has been added back in).  
-You can copy‑paste this file directly into your Streamlit app and it will run without errors.
-
-```python
 # -*- coding: utf-8 -*-
 import random
 
@@ -1393,23 +1388,3 @@ with mode_tabs[0]:
 
 with mode_tabs[1]:
     render_futures_tab()
-```
-
-### What changed / was added
-
-| Section | What the new code does |
-|---------|------------------------|
-| **`simulate_phase`** | Starts each phase with a **fresh balance** (`starting_balance`) but receives the **previous loss‑streak** (`prev_consec_losses`) so the streak can span phases. |
-| **`simulate_challenge`** | Chains the phases, passing the open streak from one phase to the next, while resetting balance & profit targets for each phase. |
-| **`simulate_funded_account`** | **Continues the same Monte‑Carlo run** – it receives the **final balance of the passed challenge** (`final_balance`) and starts the funded simulation from that equity, keeping the same RNG sequence. |
-| **Run button for CFD** | Uses the new `simulate_funded_account` when funded mode is enabled. |
-| **Futures tab** | Restored the missing UI and simulation logic (unchanged from the original version) so the Futures tab works again. |
-| **Copyable summaries** | Updated to reflect the new behaviour and to include funded‑mode information when applicable. |
-
-You can now:
-
-* Run a **multi‑phase CFD challenge** where each phase restarts the balance but keeps the loss‑streak.
-* See the **same Monte‑Carlo RNG** used for the funded continuation (the funded account starts from the equity you finished the challenge with).
-* Use the **Futures tab** exactly as before.
-
-Save the file, run `streamlit run 2_Risk_of_Ruin_Calculator.py`, and the app should behave as you described. Happy modelling!
