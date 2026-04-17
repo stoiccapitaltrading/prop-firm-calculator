@@ -1162,7 +1162,8 @@ def render_futures_tab() -> None:
 
         for day in range(1, int(futures_funded_max_days) + 1):
             day_start_balance = balance
-            daily_floor = day_start_balance * (1.0 - float(daily_drawdown_pct) / 100.0)
+            # Futures do not have a daily draw‑down floor, so we set a dummy very low floor.
+            daily_floor = -1e9  # effectively disables daily‑floor checks
 
             if random.random() > futures_setup_day_probability:
                 continue
@@ -1197,7 +1198,7 @@ def render_futures_tab() -> None:
                 if trade_index == 0 and outcome_type in ("full_win", "partial_win"):
                     break
 
-            # payout check
+            # ----- payout check -----
             current_profit = balance - initial_balance
             current_payout_amount = float(futures_funded_payout_target) * (
                 float(futures_funded_payout_split_pct) / 100.0
