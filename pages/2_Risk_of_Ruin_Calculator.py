@@ -23,6 +23,14 @@ def estimate_setup_day_probability(avg_trades_per_month: float, win_rate_pct: fl
     return setup_day_probability, expected_setup_days
 
 
+def payout_interval_days(frequency: str) -> int:
+    return {
+        "Weekly": 5,
+        "Biweekly": BIWEEKLY_TRADING_DAYS,
+        "Monthly": TRADING_DAYS_PER_MONTH,
+    }[frequency]
+
+
 def render_cfd_tab() -> None:
     st.caption("Estimate ruin risk, pass probability, and expected time-to-pass for prop-firm CFD challenges.")
 
@@ -263,6 +271,14 @@ def render_cfd_tab() -> None:
                 step=100.0,
                 key="cfd_funded_payout_target",
             )
+            funded_payout_split_pct = st.number_input(
+                "Payout Split (%)",
+                min_value=1.0,
+                max_value=100.0,
+                value=80.0,
+                step=1.0,
+                key="cfd_funded_payout_split_pct",
+            )
         with funded_col2:
             funded_max_days = st.slider(
                 "Funded Trading Days",
@@ -271,9 +287,15 @@ def render_cfd_tab() -> None:
                 value=30,
                 key="cfd_funded_max_days",
             )
+            funded_payout_frequency = st.selectbox(
+                "Payout Frequency",
+                options=["Weekly", "Biweekly", "Monthly"],
+                index=1,
+                key="cfd_funded_payout_frequency",
+            )
         st.caption(
             "Funded mode starts from the account's initial balance after passing, keeps the same setup frequency and day-stop rules, "
-            "and checks payout eligibility every 10 trading days from the first funded trading day."
+            "and checks payout eligibility on the selected funded payout schedule from the first funded trading day."
         )
 
     def simulate_phase(target_profit_pct: float, use_trailing: bool = False) -> tuple[bool, bool, float, int, int]:
@@ -417,8 +439,9 @@ def render_cfd_tab() -> None:
                 if trade_index == 0 and outcome in ("full_win", "partial_win"):
                     break
 
-            if day % BIWEEKLY_TRADING_DAYS == 0 and balance - initial_balance >= float(funded_payout_target):
-                balance -= float(funded_payout_target)
+            payout_amount = float(funded_payout_target) * (float(funded_payout_split_pct) / 100.0)
+            if day % payout_interval_days(funded_payout_frequency) == 0 and balance - initial_balance >= float(funded_payout_target):
+                balance -= payout_amount
                 payout_hits += 1
                 if first_payout_day is None:
                     first_payout_day = day
@@ -769,6 +792,14 @@ def render_futures_tab() -> None:
                 step=100.0,
                 key="futures_funded_payout_target",
             )
+            futures_funded_payout_split_pct = st.number_input(
+                "Payout Split (%)",
+                min_value=1.0,
+                max_value=100.0,
+                value=80.0,
+                step=1.0,
+                key="futures_funded_payout_split_pct",
+            )
         with funded_col2:
             futures_funded_max_days = st.slider(
                 "Funded Trading Days",
@@ -777,9 +808,15 @@ def render_futures_tab() -> None:
                 value=30,
                 key="futures_funded_max_days",
             )
+            futures_funded_payout_frequency = st.selectbox(
+                "Payout Frequency",
+                options=["Weekly", "Biweekly", "Monthly"],
+                index=1,
+                key="futures_funded_payout_frequency",
+            )
         st.caption(
             "Funded mode starts from the initial account balance after pass, continues with the same setup availability and daily stop rules, "
-            "and checks payout eligibility every 10 trading days from the first funded trading day."
+            "and checks payout eligibility on the selected funded payout schedule from the first funded trading day."
         )
 
     run_futures_simulation = st.button("Run Futures Simulation", type="primary", key="futures_run_sim_button")
@@ -934,8 +971,9 @@ def render_futures_tab() -> None:
                 if trailing_floor > floor_balance:
                     floor_balance = trailing_floor
 
-            if day % BIWEEKLY_TRADING_DAYS == 0 and balance - initial_balance >= float(futures_funded_payout_target):
-                balance -= float(futures_funded_payout_target)
+            payout_amount = float(futures_funded_payout_target) * (float(futures_funded_payout_split_pct) / 100.0)
+            if day % payout_interval_days(futures_funded_payout_frequency) == 0 and balance - initial_balance >= float(futures_funded_payout_target):
+                balance -= payout_amount
                 payout_hits += 1
                 if first_payout_day is None:
                     first_payout_day = day
