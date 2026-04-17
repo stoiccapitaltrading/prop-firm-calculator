@@ -425,6 +425,7 @@ def render_futures_tab() -> None:
             step=0.1,
             key="futures_profit_target_pct",
         )
+        st.caption(f"${float(futures_balance) * (float(futures_profit_target_pct) / 100.0):,.2f}")
         futures_max_drawdown_pct = st.number_input(
             "Max Drawdown (%)",
             min_value=0.1,
@@ -433,6 +434,7 @@ def render_futures_tab() -> None:
             step=0.1,
             key="futures_max_drawdown_pct",
         )
+        st.caption(f"${float(futures_balance) * (float(futures_max_drawdown_pct) / 100.0):,.2f}")
         futures_drawdown_mode = st.selectbox(
             "Drawdown Mode",
             options=["Static", "Trailing Equity", "Trailing EOD Equity"],
@@ -532,13 +534,6 @@ def render_futures_tab() -> None:
     if futures_non_loss_pct > 100:
         st.error("Win Rate % + Partial Win Rate % + Breakeven Rate % cannot exceed 100%.")
         st.stop()
-
-    futures_profit_target_amount = float(futures_balance) * (float(futures_profit_target_pct) / 100.0)
-    futures_max_drawdown_amount = float(futures_balance) * (float(futures_max_drawdown_pct) / 100.0)
-
-    amount_col1, amount_col2 = st.columns(2)
-    amount_col1.metric("Profit Target ($)", f"${futures_profit_target_amount:,.2f}")
-    amount_col2.metric("Max Drawdown ($)", f"${futures_max_drawdown_amount:,.2f}")
 
     futures_loss_rate_pct = 100.0 - futures_non_loss_pct
     futures_ev = (
