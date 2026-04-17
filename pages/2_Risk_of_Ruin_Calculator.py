@@ -214,7 +214,7 @@ def render_cfd_tab() -> None:
             key="cfd_target_phase_1_pct",
         )
         min_days_phase_1 = st.number_input(
-            "Min Trading Days (Phase 1)",
+            "Min Trading Days (Phase 1)",
             min_value=0,
             max_value=180,
             value=0,
@@ -222,7 +222,7 @@ def render_cfd_tab() -> None:
             key="cfd_min_days_phase_1",
         )
         min_profit_day_pct_phase_1 = st.number_input(
-            "Min Profitable‑Day % (Phase 1)",
+            "Min Profitable‑Day % (Phase 1)",
             min_value=0.0,
             max_value=5.0,
             value=0.0,
@@ -241,7 +241,7 @@ def render_cfd_tab() -> None:
                 key="cfd_target_phase_2_pct",
             )
             min_days_phase_2 = st.number_input(
-                "Min Trading Days (Phase 2)",
+                "Min Trading Days (Phase 2)",
                 min_value=0,
                 max_value=180,
                 value=0,
@@ -249,7 +249,7 @@ def render_cfd_tab() -> None:
                 key="cfd_min_days_phase_2",
             )
             min_profit_day_pct_phase_2 = st.number_input(
-                "Min Profitable‑Day % (Phase 2)",
+                "Min Profitable‑Day % (Phase 2)",
                 min_value=0.0,
                 max_value=5.0,
                 value=0.0,
@@ -272,7 +272,7 @@ def render_cfd_tab() -> None:
                 key="cfd_target_phase_3_pct",
             )
             min_days_phase_3 = st.number_input(
-                "Min Trading Days (Phase 3)",
+                "Min Trading Days (Phase 3)",
                 min_value=0,
                 max_value=180,
                 value=0,
@@ -280,7 +280,7 @@ def render_cfd_tab() -> None:
                 key="cfd_min_days_phase_3",
             )
             min_profit_day_pct_phase_3 = st.number_input(
-                "Min Profitable‑Day % (Phase 3)",
+                "Min Profitable‑Day % (Phase 3)",
                 min_value=0.0,
                 max_value=5.0,
                 value=0.0,
@@ -316,10 +316,10 @@ def render_cfd_tab() -> None:
     # ------------------------------------------------------------------
     st.markdown("### Advanced Options")
     use_eod_trailing_stop = st.toggle(
-        "Enable EOD Trailing Stop (Phase 1 only)",
+        "Enable EOD Trailing Stop (Phase 1 only)",
         value=False,
         key="cfd_use_eod_trailing_stop",
-        help="The overall drawdown floor trails up each EOD based on the highest closing balance reached so far in Phase 1.",
+        help="The overall drawdown floor trails up each EOD based on the highest closing balance reached so far in Phase 1.",
     )
     if use_eod_trailing_stop:
         st.caption(
@@ -329,7 +329,7 @@ def render_cfd_tab() -> None:
         )
 
     # ------------------------------------------------------------------
-    #   Funded‑account continuation toggle (no payout target any more)
+    #   Funded‑account continuation toggle (no payout target)
     # ------------------------------------------------------------------
     st.markdown("### Funded Account Continuation")
     enable_funded_mode = st.toggle(
@@ -386,8 +386,8 @@ def render_cfd_tab() -> None:
             ruined, passed,
             final_balance,
             days_used,
-            max_consec_losses      – worst streak *inside* this phase,
-            final_consec_losses    – streak length still open at the end of the phase,
+            max_consec_losses   – worst streak *inside* this phase,
+            final_consec_losses – streak length still open at the end of the phase,
             first_payout_size
         """
         # ----- 1️⃣  Fresh balance for the new phase -----
@@ -458,7 +458,7 @@ def render_cfd_tab() -> None:
                 # ----- 5c.  Draw‑down checks -----
                 if balance <= overall_floor or balance <= daily_floor:
                     return True, False, balance, day, max_consec_losses, current_consec_losses, first_payout_size
-                # Do NOT return on profit target yet – we may need to satisfy min‑days / profit‑day constraints
+                # Do NOT prematurely return on profit target—still need min‑day constraints
 
                 # ----- 5d.  Full/partial win ends the day -----
                 if trade_index == 0 and outcome in ("full_win", "partial_win"):
@@ -476,14 +476,10 @@ def render_cfd_tab() -> None:
                     overall_floor = new_floor
 
             # ----- 5f.  Check whether the phase can be considered passed -----
-            # Passed only if:
-            #   • balance reached or exceeded target,
-            #   • minimum trading days satisfied,
-            #   • minimum‑profit‑day satisfied (if a threshold > 0 was set).
             if (
-                balance >= target_balance
-                and day >= min_days
-                and (min_profit_day_pct == 0.0 or profit_day_met)
+                balance >= target_balance          # hit profit target
+                and day >= min_days                # satisfied minimum trading days
+                and (min_profit_day_pct == 0.0 or profit_day_met)  # optional profitable‑day rule
             ):
                 return False, True, balance, day, max_consec_losses, current_consec_losses, first_payout_size
 
@@ -503,7 +499,7 @@ def render_cfd_tab() -> None:
             ruined, passed,
             reached_p2, reached_p3,
             final_balance,
-            days_to_pass (first‑pass day, if any),
+            days_to_pass (cumulative days when the pass occurs),
             total_days (cumulative across all attempted phases),
             worst_consecutive_losses,
             first_payout_size
@@ -516,7 +512,7 @@ def render_cfd_tab() -> None:
             use_trailing=use_eod_trailing_stop,
             prev_consec_losses=0,
         )
-        total_days = days
+        total_days = days               # days spent in Phase 1
         worst_consec = max_consec
         first_payout_size = first_payout
         reached_p2 = reached_p3 = False
@@ -538,12 +534,12 @@ def render_cfd_tab() -> None:
             use_trailing=False,
             prev_consec_losses=cur_consec,          # carry streak forward
         )
-        total_days += days
+        total_days += days               # add Phase 2 days
         worst_consec = max(worst_consec, max_consec)
         if first_payout_size == 0.0 and payout > 0.0:
             first_payout_size = payout
         if days_to_pass is None and passed:
-            days_to_pass = days
+            days_to_pass = total_days   # cumulative total when pass occurs
 
         if ruined:
             return True, False, True, False, bal, None, total_days, worst_consec, first_payout_size
@@ -561,12 +557,12 @@ def render_cfd_tab() -> None:
             use_trailing=False,
             prev_consec_losses=cur_consec,
         )
-        total_days += days
+        total_days += days               # add Phase 3 days
         worst_consec = max(worst_consec, max_consec)
         if first_payout_size == 0.0 and payout > 0.0:
             first_payout_size = payout
         if days_to_pass is None and passed:
-            days_to_pass = days
+            days_to_pass = total_days   # cumulative total when pass occurs
 
         if ruined:
             return True, False, True, True, bal, None, total_days, worst_consec, first_payout_size
@@ -577,7 +573,7 @@ def render_cfd_tab() -> None:
         return False, False, True, True, bal, None, total_days, worst_consec, first_payout_size
 
     # ----------------------------------------------------------------------
-    #   FUNDED‑ACCOUNT simulation – starts from a *reset* balance, withdraw whatever profit
+    #   FUNDED‑ACCOUNT simulation – start from a *reset* balance, withdraw whatever profit
     # ----------------------------------------------------------------------
     def simulate_funded_account() -> tuple[bool, int, int | None, float]:
         """
@@ -635,7 +631,7 @@ def render_cfd_tab() -> None:
                 if trade_index == 0 and outcome_type in ("full_win", "partial_win"):
                     break
 
-            # ----- payout check : withdraw whatever profit is available -----
+            # ----- payout check : withdraw whatever profit is present -----
             current_profit = balance - initial_balance
             if (
                 day % payout_interval_days(funded_payout_frequency) == 0
@@ -658,7 +654,7 @@ def render_cfd_tab() -> None:
         ruined_count = 0
         passed_count = 0
         ending_balances: list[float] = []
-        pass_days: list[int] = []
+        pass_days: list[int] = []          # cumulative days when the pass occurs
         ending_profits: list[float] = []
         funded_payout_reached_count = 0
         funded_payout_hits: list[int] = []
@@ -685,6 +681,7 @@ def render_cfd_tab() -> None:
             ending_profits.append(float(final_balance - starting_balance))
 
             if passed:
+                # `days_to_pass` already holds the **cumulative** day count
                 pass_days.append(int(days_to_pass))
                 if enable_funded_mode:
                     (
@@ -726,7 +723,7 @@ def render_cfd_tab() -> None:
         if avg_days_to_pass is not None:
             weeks, months = days_to_weeks_months(avg_days_to_pass)
             st.success(
-                f"Average time to pass: **{avg_days_to_pass:.1f} trading days** "
+                f"Average time to pass the entire challenge: **{avg_days_to_pass:.1f} trading days** "
                 f"(~**{weeks:.1f} weeks** / ~**{months:.1f} months**)"
             )
         else:
@@ -785,14 +782,14 @@ def render_cfd_tab() -> None:
             "CFD Risk of Ruin Summary",
             f"Starting balance: ${float(starting_balance):,.2f}",
             f"Profit target Phase 1: {float(target_phase_1_pct):.2f}%",
-            f"Min Days Phase 1: {int(min_days_phase_1)}",
-            f"Min Profit‑Day % Phase 1: {float(min_profit_day_pct_phase_1):.2f}%",
+            f"Min Trading Days Phase 1: {int(min_days_phase_1)}",
+            f"Min Profitable‑Day % Phase 1: {float(min_profit_day_pct_phase_1):.2f}%",
             f"Profit target Phase 2: {float(target_phase_2_pct):.2f}%" if challenge_type != "1-Phase Challenge" else "",
-            f"Min Days Phase 2: {int(min_days_phase_2)}",
-            f"Min Profit‑Day % Phase 2: {float(min_profit_day_pct_phase_2):.2f}%" if challenge_type != "1-Phase Challenge" else "",
+            f"Min Trading Days Phase 2: {int(min_days_phase_2)}",
+            f"Min Profitable‑Day % Phase 2: {float(min_profit_day_pct_phase_2):.2f}%" if challenge_type != "1-Phase Challenge" else "",
             f"Profit target Phase 3: {float(target_phase_3_pct):.2f}%" if challenge_type == "3-Phase Challenge" else "",
-            f"Min Days Phase 3: {int(min_days_phase_3)}",
-            f"Min Profit‑Day % Phase 3: {float(min_profit_day_pct_phase_3):.2f}%" if challenge_type == "3-Phase Challenge" else "",
+            f"Min Trading Days Phase 3: {int(min_days_phase_3)}",
+            f"Min Profitable‑Day % Phase 3: {float(min_profit_day_pct_phase_3):.2f}%" if challenge_type == "3-Phase Challenge" else "",
             f"Overall draw‑down limit: {float(overall_drawdown_pct):.2f}%",
             f"Risk per trade: {float(risk_per_trade_pct):.2f}% of balance",
             f"Simulation runs: {int(simulation_runs)}",
@@ -802,7 +799,7 @@ def render_cfd_tab() -> None:
             f"Avg ending profit: ${avg_ending_profit:,.2f}",
         ]
         if avg_days_to_pass is not None:
-            summary_lines.append(f"Avg time to pass: {avg_days_to_pass:.1f} trading days")
+            summary_lines.append(f"Avg time to pass (cumulative): {avg_days_to_pass:.1f} trading days")
         if enable_funded_mode and passed_count > 0:
             summary_lines.extend(
                 [
@@ -1241,7 +1238,7 @@ def render_futures_tab() -> None:
 
         for day in range(1, int(futures_funded_max_days) + 1):
             day_start_balance = balance
-            # Futures do not have a daily draw‑down floor, set a dummy very low value
+            # Futures do not have a daily draw‑down floor – use a dummy very low value
             daily_floor = -1e9
 
             if random.random() > futures_setup_day_probability:
