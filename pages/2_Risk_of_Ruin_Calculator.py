@@ -361,36 +361,81 @@ def render_cfd_tab() -> None:
         return False, False, balance, int(max_days_per_phase), max_consec_losses, first_payout_size
 
     def simulate_challenge() -> tuple[bool, bool, bool, bool, float, int | None, int, int, float]:
-        ruined, passed, reached_p2, reached_p3, final_balance, days_to_pass, total_days, max_consec, first_payout_size = (
-            simulate_phase(
-                target_phase_1_pct,
-                use_trailing=use_eod_trailing_stop,
-            )
+        # This function aggregates results from simulate_phase for each challenge phase.
+        # It needs to return a consistent set of values that includes results for all phases.
+
+        # Phase 1 simulation
+        ruined_p1, passed_p1, balance_p1, days_p1, consec_p1, first_payout_size_p1 = simulate_phase(
+            target_phase_1_pct,
+            use_trailing=use_eod_trailing_stop,
         )
+        
+        # Initialize aggregate results
+        ruined = ruined_p1
+        passed = passed_p1
+        final_balance = balance_p1
+        days_to_pass = days_p1
+        max_consec = consec_p1
+        # The first payout size should be captured from the first phase that achieves a payout,
+        # or from a later phase if an earlier one didn't have a payout.
+        first_payout_size = first_payout_size_p1
+        total_days = days_p1
+
+        reached_p2 = False
+        reached_p3 = False
+
+        # If phase 1 resulted in ruin, immediately return
         if ruined:
             return True, False, False, False, final_balance, None, total_days, max_consec, first_payout_size
+        # If phase 1 did not pass (and not ruined), it's a failure to pass.
         if not passed:
             return False, False, False, False, final_balance, None, total_days, max_consec, first_payout_size
+        
+        # If it's a 1-phase challenge and phase 1 passed, we are done.
         if challenge_type == "1-Phase Challenge":
             return False, True, False, False, final_balance, days_to_pass, total_days, max_consec, first_payout_size
 
-        ruined_p2, passed_p2, _, days_p2, consec_p2, first_payout_size_p2 = simulate_phase(target_phase_2_pct, use_trailing=False)
-        total_days = total_days + days_p2
+        # --- Phase 2 simulation ---
+        reached_p2 = True
+        ruined_p2, passed_p2, balance_p2, days_p2, consec_p2, first_payout_size_p2 = simulate_phase(target_phase_2_pct, use_trailing=False)
+        
+        total_days += days_p2
         max_consec = max(max_consec, consec_p2)
+        final_balance = balance_p2 # Update final balance to phase 2's outcome
+
+        # If phase 2 resulted in ruin, the overall challenge is ruined.
         if ruined_p2:
             return True, False, True, False, final_balance, None, total_days, max_consec, first_payout_size
+        # If phase 2 did not pass (and not ruined), the challenge is failed.
         if not passed_p2:
             return False, False, True, False, final_balance, None, total_days, max_consec, first_payout_size
+        
+        # If it's a 2-phase challenge and phase 2 passed, we are done.
         if challenge_type == "2-Phase Challenge":
+            # If phase 1 had a payout, use that first_payout_size. Otherwise, use phase 2's.
+            if first_payout_size == 0.0:
+                first_payout_size = first_payout_size_p2
             return False, True, True, False, final_balance, days_to_pass, total_days, max_consec, first_payout_size
 
-        ruined_p3, passed_p3, _, days_p3, consec_p3, first_payout_size_p3 = simulate_phase(target_phase_3_pct, use_trailing=False)
-        total_days = total_days + days_p3
+        # --- Phase 3 simulation ---
+        reached_p3 = True # We are entering phase 3
+        ruined_p3, passed_p3, balance_p3, days_p3, consec_p3, first_payout_size_p3 = simulate_phase(target_phase_3_pct, use_trailing=False)
+        
+        total_days += days_p3
         max_consec = max(max_consec, consec_p3)
+        final_balance = balance_p3 # Update final balance to phase 3's outcome
+
+        # If phase 3 resulted in ruin, the overall challenge is ruined.
         if ruined_p3:
             return True, False, True, True, final_balance, None, total_days, max_consec, first_payout_size
+        # If phase 3 passed, the challenge is passed.
         if passed_p3:
+            # Capture the first payout size from phase 1, 2, or 3 if none was recorded before.
+            if first_payout_size == 0.0:
+                first_payout_size = first_payout_size_p2 if first_payout_size_p2 > 0 else first_payout_size_p3
             return False, True, True, True, final_balance, days_to_pass, total_days, max_consec, first_payout_size
+        
+        # If we reach here, it means challenge is 3-phase but phase 3 was not passed (and not ruined)
         return False, False, True, True, final_balance, None, total_days, max_consec, first_payout_size
 
 
@@ -464,7 +509,7 @@ def render_cfd_tab() -> None:
         cfd_first_payout_sizes: list[float] = []
 
         for _ in range(int(simulation_runs)):
-            ruined, passed, reached_p2, reached_p3, final_balance, days_to_pass, _total_days, max_consec, first_payout_size = (
+            ruined, passed, reached_p2, reached_p3, final_balance, days_to_pass, total_days, max_consec, first_payout_size = (
                 simulate_challenge()
             )
             ruined_count += int(ruined)
@@ -1054,7 +1099,7 @@ def render_futures_tab() -> None:
         funded_ruin_after_pass_count = 0
         futures_first_payout_sizes: list[float] = []
 
-        for _ in range(int(futures_simulation_runs)):
+        for _ in range(int(simulation_runs)):
             ruined, passed, final_balance, days_elapsed, total_profit, best_day_profit, first_payout_size = simulate_futures_run()
             ruined_count += int(ruined)
             passed_count += int(passed)
@@ -1075,7 +1120,7 @@ def render_futures_tab() -> None:
                         futures_first_payout_sizes.append(funded_first_payout_size)
 
         risk_of_ruin = ruined_count / float(futures_simulation_runs)
-        chance_to_pass = passed_count / float(futures_simulation_runs)
+        chance_to_pass = passed_count / float(simulation_runs)
         survival_rate = 1.0 - risk_of_ruin
         avg_ending_balance = sum(ending_balances) / len(ending_balances) if ending_balances else 0.0
         avg_ending_profit = sum(ending_profits) / len(ending_profits) if ending_profits else 0.0
@@ -1155,7 +1200,7 @@ def render_futures_tab() -> None:
             f"Risk per trade: ${effective_risk_amount:,.2f} ({effective_risk_pct:.2f}%)",
             f"Average trades per month: {int(futures_avg_trades_per_month)}",
             f"Expected setup days per month: {futures_expected_setup_days:.1f}",
-            f"Simulation runs: {int(futures_simulation_runs)}",
+            f"Simulation runs: {int(simulation_runs)}",
             f"Max trading days: {int(futures_max_days)}",
             f"Risk of ruin: {risk_of_ruin:.2%}",
             f"Chance to pass: {chance_to_pass:.2%}",
