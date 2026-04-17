@@ -7,6 +7,7 @@ st.set_page_config(page_title="Risk of Ruin Calculator", layout="wide")
 
 TRADING_DAYS_PER_WEEK = 5
 TRADING_DAYS_PER_MONTH = 21
+BIWEEKLY_TRADING_DAYS = 10
 
 
 def days_to_weeks_months(trading_days: float) -> tuple[float, float]:
@@ -271,7 +272,8 @@ def render_cfd_tab() -> None:
                 key="cfd_funded_max_days",
             )
         st.caption(
-            "Funded mode starts from the account's initial balance after passing and keeps the same setup frequency and day-stop rules."
+            "Funded mode starts from the account's initial balance after passing, keeps the same setup frequency and day-stop rules, "
+            "and checks payout eligibility every 10 trading days from the first funded trading day."
         )
 
     def simulate_phase(target_profit_pct: float, use_trailing: bool = False) -> tuple[bool, bool, float, int, int]:
@@ -415,7 +417,7 @@ def render_cfd_tab() -> None:
                 if trade_index == 0 and outcome in ("full_win", "partial_win"):
                     break
 
-            while balance - initial_balance >= float(funded_payout_target):
+            if day % BIWEEKLY_TRADING_DAYS == 0 and balance - initial_balance >= float(funded_payout_target):
                 balance -= float(funded_payout_target)
                 payout_hits += 1
                 if first_payout_day is None:
@@ -776,7 +778,8 @@ def render_futures_tab() -> None:
                 key="futures_funded_max_days",
             )
         st.caption(
-            "Funded mode starts from the initial account balance after pass and continues with the same setup availability and daily stop rules."
+            "Funded mode starts from the initial account balance after pass, continues with the same setup availability and daily stop rules, "
+            "and checks payout eligibility every 10 trading days from the first funded trading day."
         )
 
     run_futures_simulation = st.button("Run Futures Simulation", type="primary", key="futures_run_sim_button")
@@ -931,7 +934,7 @@ def render_futures_tab() -> None:
                 if trailing_floor > floor_balance:
                     floor_balance = trailing_floor
 
-            while balance - initial_balance >= float(futures_funded_payout_target):
+            if day % BIWEEKLY_TRADING_DAYS == 0 and balance - initial_balance >= float(futures_funded_payout_target):
                 balance -= float(futures_funded_payout_target)
                 payout_hits += 1
                 if first_payout_day is None:
