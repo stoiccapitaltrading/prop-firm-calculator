@@ -533,6 +533,13 @@ def render_futures_tab() -> None:
         st.error("Win Rate % + Partial Win Rate % + Breakeven Rate % cannot exceed 100%.")
         st.stop()
 
+    futures_profit_target_amount = float(futures_balance) * (float(futures_profit_target_pct) / 100.0)
+    futures_max_drawdown_amount = float(futures_balance) * (float(futures_max_drawdown_pct) / 100.0)
+
+    amount_col1, amount_col2 = st.columns(2)
+    amount_col1.metric("Profit Target ($)", f"${futures_profit_target_amount:,.2f}")
+    amount_col2.metric("Max Drawdown ($)", f"${futures_max_drawdown_amount:,.2f}")
+
     futures_loss_rate_pct = 100.0 - futures_non_loss_pct
     futures_ev = (
         (futures_win_rate_pct / 100.0) * float(futures_avg_win_r)
