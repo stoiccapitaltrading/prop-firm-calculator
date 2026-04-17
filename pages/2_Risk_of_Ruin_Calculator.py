@@ -835,6 +835,7 @@ def render_futures_tab() -> None:
         drawdown_amount = initial_balance * (float(futures_max_drawdown_pct) / 100.0)
         floor_balance = initial_balance - drawdown_amount
         peak_balance = initial_balance
+        max_trailing_floor = initial_balance + 100.0
 
         win_threshold = float(futures_win_rate_pct) / 100.0
         partial_win_threshold = win_threshold + float(futures_partial_win_rate_pct) / 100.0
@@ -880,7 +881,7 @@ def render_futures_tab() -> None:
 
                 if futures_drawdown_mode == "Trailing Equity" and balance > peak_balance:
                     peak_balance = balance
-                    trailing_floor = peak_balance - drawdown_amount
+                    trailing_floor = min(peak_balance - drawdown_amount, max_trailing_floor)
                     if trailing_floor > floor_balance:
                         floor_balance = trailing_floor
 
@@ -896,7 +897,7 @@ def render_futures_tab() -> None:
 
             if futures_drawdown_mode == "Trailing EOD Equity" and balance > peak_balance:
                 peak_balance = balance
-                trailing_floor = peak_balance - drawdown_amount
+                trailing_floor = min(peak_balance - drawdown_amount, max_trailing_floor)
                 if trailing_floor > floor_balance:
                     floor_balance = trailing_floor
 
@@ -913,6 +914,7 @@ def render_futures_tab() -> None:
         drawdown_amount = initial_balance * (float(futures_max_drawdown_pct) / 100.0)
         floor_balance = initial_balance - drawdown_amount
         peak_balance = initial_balance
+        max_trailing_floor = initial_balance + 100.0
         win_threshold = float(futures_win_rate_pct) / 100.0
         partial_win_threshold = win_threshold + float(futures_partial_win_rate_pct) / 100.0
         breakeven_threshold = partial_win_threshold + float(futures_breakeven_rate_pct) / 100.0
@@ -955,7 +957,7 @@ def render_futures_tab() -> None:
 
                 if futures_drawdown_mode == "Trailing Equity" and balance > peak_balance:
                     peak_balance = balance
-                    trailing_floor = peak_balance - drawdown_amount
+                    trailing_floor = min(peak_balance - drawdown_amount, max_trailing_floor)
                     if trailing_floor > floor_balance:
                         floor_balance = trailing_floor
 
@@ -967,7 +969,7 @@ def render_futures_tab() -> None:
 
             if futures_drawdown_mode == "Trailing EOD Equity" and balance > peak_balance:
                 peak_balance = balance
-                trailing_floor = peak_balance - drawdown_amount
+                trailing_floor = min(peak_balance - drawdown_amount, max_trailing_floor)
                 if trailing_floor > floor_balance:
                     floor_balance = trailing_floor
 
