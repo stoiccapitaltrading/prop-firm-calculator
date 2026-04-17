@@ -504,13 +504,28 @@ def render_futures_tab() -> None:
             format="%.2f",
             key="futures_avg_loss_r",
         )
+        futures_risk_mode = st.selectbox(
+            "Risk Input Mode",
+            options=["Percent of Balance", "Fixed Dollar Risk"],
+            key="futures_risk_mode",
+        )
         futures_risk_per_trade_pct = st.number_input(
             "Risk Per Trade (% of balance)",
-            min_value=0.1,
+            min_value=0.01,
             max_value=5.0,
             value=0.5,
-            step=0.1,
+            step=0.01,
+            format="%.2f",
             key="futures_risk_per_trade_pct",
+            disabled=futures_risk_mode != "Percent of Balance",
+        )
+        futures_risk_per_trade_amount = st.number_input(
+            "Risk Per Trade ($)",
+            min_value=1.0,
+            value=100.0,
+            step=10.0,
+            key="futures_risk_per_trade_amount",
+            disabled=futures_risk_mode != "Fixed Dollar Risk",
         )
         futures_trades_per_day = st.number_input(
             "Trades Per Day",
@@ -546,11 +561,18 @@ def render_futures_tab() -> None:
         if use_consistency_rule
         else "Consistency: off"
     )
+    effective_risk_amount = (
+        float(futures_balance) * (float(futures_risk_per_trade_pct) / 100.0)
+        if futures_risk_mode == "Percent of Balance"
+        else float(futures_risk_per_trade_amount)
+    )
+    effective_risk_pct = (effective_risk_amount / float(futures_balance)) * 100.0 if futures_balance else 0.0
 
     st.caption(
         f"Starting balance: **${futures_balance:,.0f}** | "
         f"Target: **{futures_profit_target_pct:.1f}%** | "
         f"Drawdown: **{futures_max_drawdown_pct:.1f}%** ({futures_drawdown_mode}) | "
+        f"Risk/trade: **${effective_risk_amount:,.2f} ({effective_risk_pct:.2f}%)** | "
         f"{consistency_summary} | "
         f"Expected Value per trade: **{futures_ev:+.4f}R**"
     )
@@ -594,14 +616,16 @@ def render_futures_tab() -> None:
         win_threshold = float(futures_win_rate_pct) / 100.0
         partial_win_threshold = win_threshold + float(futures_partial_win_rate_pct) / 100.0
         breakeven_threshold = partial_win_threshold + float(futures_breakeven_rate_pct) / 100.0
-        risk_fraction = float(futures_risk_per_trade_pct) / 100.0
         best_day_profit = 0.0
 
         for day in range(1, int(futures_max_days) + 1):
             day_profit = 0.0
 
             for _ in range(int(futures_trades_per_day)):
-                risk_amount = balance * risk_fraction
+                if futures_risk_mode == "Percent of Balance":
+                    risk_amount = balance * (float(futures_risk_per_trade_pct) / 100.0)
+                else:
+                    risk_amount = float(futures_risk_per_trade_amount)
                 outcome = random.random()
 
                 if outcome < win_threshold:
