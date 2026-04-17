@@ -264,13 +264,6 @@ def render_cfd_tab() -> None:
     if enable_funded_mode:
         funded_col1, funded_col2 = st.columns(2)
         with funded_col1:
-            funded_payout_target = st.number_input(
-                "Payout Target ($)",
-                min_value=100.0,
-                value=2000.0,
-                step=100.0,
-                key="cfd_funded_payout_target",
-            )
             funded_payout_split_pct = st.number_input(
                 "Payout Split (%)",
                 min_value=1.0,
@@ -297,6 +290,7 @@ def render_cfd_tab() -> None:
             "Funded mode starts from the account's initial balance after passing, keeps the same setup frequency and day-stop rules, "
             "and checks payout eligibility on the selected funded payout schedule from the first funded trading day."
         )
+        st.caption("CFD funded payouts withdraw a percentage of any positive profit at the payout checkpoint. No payout target is required.")
 
     def simulate_phase(target_profit_pct: float, use_trailing: bool = False) -> tuple[bool, bool, float, int, int]:
         balance = float(starting_balance)
@@ -439,8 +433,9 @@ def render_cfd_tab() -> None:
                 if trade_index == 0 and outcome in ("full_win", "partial_win"):
                     break
 
-            payout_amount = float(funded_payout_target) * (float(funded_payout_split_pct) / 100.0)
-            if day % payout_interval_days(funded_payout_frequency) == 0 and balance - initial_balance >= float(funded_payout_target):
+            current_profit = balance - initial_balance
+            payout_amount = current_profit * (float(funded_payout_split_pct) / 100.0)
+            if day % payout_interval_days(funded_payout_frequency) == 0 and current_profit > 0:
                 balance -= payout_amount
                 payout_hits += 1
                 if first_payout_day is None:
@@ -560,6 +555,47 @@ def render_cfd_tab() -> None:
                     f"Average time to first payout: **{(sum(funded_first_payout_days) / len(funded_first_payout_days)):.1f} trading days** "
                     f"(~**{payout_weeks:.1f} weeks** / ~**{payout_months:.1f} months**)"
                 )
+
+        cfd_summary_lines = [
+            "CFD Risk of Ruin Summary",
+            f"Challenge type: {challenge_type}",
+            f"Starting balance: ${float(starting_balance):,.2f}",
+            f"Daily drawdown: {float(daily_drawdown_pct):.2f}%",
+            f"Overall drawdown: {float(overall_drawdown_pct):.2f}%",
+            f"Full win rate: {float(win_rate_pct):.2f}% at +{float(reward_risk):.2f}R",
+            f"Partial win rate: {float(partial_win_rate_pct):.2f}% at +{float(partial_win_r):.2f}R",
+            f"Breakeven rate: {float(breakeven_rate_pct):.2f}%",
+            f"Risk per trade: {float(risk_per_trade_pct):.2f}% of balance",
+            f"Average trades per month: {int(avg_trades_per_month)}",
+            f"Expected setup days per month: {expected_setup_days:.1f}",
+            f"Simulation runs: {int(simulation_runs)}",
+            f"Max trading days per phase: {int(max_days_per_phase)}",
+            f"Risk of ruin: {risk_of_ruin:.2%}",
+            f"Chance to pass: {chance_to_pass:.2%}",
+            f"Survival rate: {survival_rate:.2%}",
+            f"Average ending balance: ${avg_ending_balance:,.2f}",
+        ]
+        if avg_days_to_pass is not None:
+            cfd_summary_lines.append(f"Average time to pass: {avg_days_to_pass:.1f} trading days")
+        if enable_funded_mode and passed_count > 0:
+            cfd_summary_lines.extend(
+                [
+                    "Funded continuation enabled",
+                    f"Payout split: {float(funded_payout_split_pct):.0f}%",
+                    f"Payout frequency: {funded_payout_frequency}",
+                    f"Payout reach rate after pass: {funded_payout_reached_count / passed_count:.2%}",
+                    f"Overall payout rate: {funded_payout_reached_count / simulation_runs:.2%}",
+                    f"Average payouts after pass: {(sum(funded_payout_hits) / len(funded_payout_hits)) if funded_payout_hits else 0.0:.2f}",
+                    f"Funded ruin after pass: {funded_ruin_after_pass_count / passed_count:.2%}",
+                ]
+            )
+        st.markdown("### Copyable Summary")
+        st.text_area(
+            "Copy this into another chat for analysis",
+            value="\n".join(cfd_summary_lines),
+            height=260,
+            key="cfd_copyable_summary",
+        )
 
 
 def render_futures_tab() -> None:
@@ -1074,6 +1110,54 @@ def render_futures_tab() -> None:
                     f"Average time to first payout: **{avg_first_payout_days:.1f} trading days** "
                     f"(~**{payout_weeks:.1f} weeks** / ~**{payout_months:.1f} months**)"
                 )
+
+        futures_summary_lines = [
+            "Futures Risk of Ruin Summary",
+            f"Starting balance: ${float(futures_balance):,.2f}",
+            f"Profit target: {float(futures_profit_target_pct):.2f}%",
+            f"Max drawdown: {float(futures_max_drawdown_pct):.2f}%",
+            f"Drawdown mode: {futures_drawdown_mode}",
+            f"Full win rate: {float(futures_win_rate_pct):.2f}% at +{float(futures_avg_win_r):.2f}R",
+            f"Partial win rate: {float(futures_partial_win_rate_pct):.2f}% at +{float(futures_partial_win_r):.2f}R",
+            f"Breakeven rate: {float(futures_breakeven_rate_pct):.2f}%",
+            f"Risk input mode: {futures_risk_mode}",
+            f"Risk per trade: ${effective_risk_amount:,.2f} ({effective_risk_pct:.2f}%)",
+            f"Average trades per month: {int(futures_avg_trades_per_month)}",
+            f"Expected setup days per month: {futures_expected_setup_days:.1f}",
+            f"Simulation runs: {int(futures_simulation_runs)}",
+            f"Max trading days: {int(futures_max_days)}",
+            f"Risk of ruin: {risk_of_ruin:.2%}",
+            f"Chance to pass: {chance_to_pass:.2%}",
+            f"Survival rate: {survival_rate:.2%}",
+            f"Average ending balance: ${avg_ending_balance:,.2f}",
+            f"Average ending profit: ${avg_ending_profit:,.2f}",
+        ]
+        if use_consistency_rule:
+            futures_summary_lines.append(f"Consistency rule: on ({float(consistency_threshold_pct):.0f}% max one-day contribution)")
+        else:
+            futures_summary_lines.append("Consistency rule: off")
+        if avg_days_to_pass is not None:
+            futures_summary_lines.append(f"Average time to pass: {avg_days_to_pass:.1f} trading days")
+        if futures_enable_funded_mode and passed_count > 0:
+            futures_summary_lines.extend(
+                [
+                    "Funded continuation enabled",
+                    f"Payout target: ${float(futures_funded_payout_target):,.2f}",
+                    f"Payout split: {float(futures_funded_payout_split_pct):.0f}%",
+                    f"Payout frequency: {futures_funded_payout_frequency}",
+                    f"Payout reach rate after pass: {funded_payout_reached_count / passed_count:.2%}",
+                    f"Overall payout rate: {funded_payout_reached_count / futures_simulation_runs:.2%}",
+                    f"Average payouts after pass: {(sum(funded_payout_hits) / len(funded_payout_hits)) if funded_payout_hits else 0.0:.2f}",
+                    f"Funded ruin after pass: {funded_ruin_after_pass_count / passed_count:.2%}",
+                ]
+            )
+        st.markdown("### Copyable Summary")
+        st.text_area(
+            "Copy this into another chat for analysis",
+            value="\n".join(futures_summary_lines),
+            height=300,
+            key="futures_copyable_summary",
+        )
 
 
 st.title("Risk of Ruin Calculator")
