@@ -538,7 +538,7 @@ def render_cfd_tab() -> None:
         worst_consec = max(worst_consec, max_consec)
         if first_payout_size == 0.0 and payout > 0.0:
             first_payout_size = payout
-        if days_to_pass is None and passed:
+        if passed:
             days_to_pass = total_days   # cumulative total when pass occurs
 
         if ruined:
