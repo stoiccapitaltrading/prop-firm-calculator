@@ -13,6 +13,15 @@ def days_to_weeks_months(trading_days: float) -> tuple[float, float]:
     return trading_days / TRADING_DAYS_PER_WEEK, trading_days / TRADING_DAYS_PER_MONTH
 
 
+def estimate_setup_day_probability(avg_trades_per_month: float, win_rate_pct: float, partial_win_rate_pct: float) -> tuple[float, float]:
+    expected_trades_per_setup_day = 2.0 - ((win_rate_pct + partial_win_rate_pct) / 100.0)
+    if expected_trades_per_setup_day <= 0:
+        return 0.0, 0.0
+    setup_day_probability = min(avg_trades_per_month / (TRADING_DAYS_PER_MONTH * expected_trades_per_setup_day), 1.0)
+    expected_setup_days = setup_day_probability * TRADING_DAYS_PER_MONTH
+    return setup_day_probability, expected_setup_days
+
+
 def render_cfd_tab() -> None:
     st.caption("Estimate ruin risk, pass probability, and expected time-to-pass for prop-firm CFD challenges.")
 
@@ -117,13 +126,13 @@ def render_cfd_tab() -> None:
             step=0.1,
             key="cfd_risk_per_trade_pct",
         )
-        trades_per_day = st.number_input(
-            "Trades Per Day",
+        avg_trades_per_month = st.number_input(
+            "Average Trades Per Month",
             min_value=1,
-            max_value=20,
-            value=3,
+            max_value=200,
+            value=22,
             step=1,
-            key="cfd_trades_per_day",
+            key="cfd_avg_trades_per_month",
         )
 
     total_non_loss = win_rate_pct + partial_win_rate_pct + breakeven_rate_pct
@@ -137,6 +146,11 @@ def render_cfd_tab() -> None:
         + (partial_win_rate_pct / 100.0) * float(partial_win_r)
         - (loss_rate_pct / 100.0) * 1.0
     )
+    setup_day_probability, expected_setup_days = estimate_setup_day_probability(
+        float(avg_trades_per_month),
+        float(win_rate_pct),
+        float(partial_win_rate_pct),
+    )
 
     st.caption(
         f"Outcome split — Full Win: **{win_rate_pct:.2f}%** @ +{reward_risk:.2f}R | "
@@ -144,6 +158,11 @@ def render_cfd_tab() -> None:
         f"BE: **{breakeven_rate_pct:.2f}%** | "
         f"Loss: **{loss_rate_pct:.2f}%** @ -1R | "
         f"Expected Value per trade: **{ev:+.4f}R**"
+    )
+    st.caption(
+        "Daily rule model: a full win or partial win ends the day. "
+        "A first-trade breakeven or loss allows one more trade only. "
+        f"Average trades/month of **{avg_trades_per_month}** implies setups on about **{expected_setup_days:.1f}** trading days per month."
     )
 
     st.markdown("### Challenge Targets & Simulation")
@@ -245,23 +264,35 @@ def render_cfd_tab() -> None:
             day_start_balance = balance
             daily_floor = day_start_balance * (1.0 - float(daily_drawdown_pct) / 100.0)
 
-            for _ in range(int(trades_per_day)):
+            if random.random() > setup_day_probability:
+                if use_trailing and balance > peak_balance:
+                    peak_balance = balance
+                    new_floor = peak_balance * (1.0 - float(overall_drawdown_pct) / 100.0)
+                    if new_floor > overall_floor:
+                        overall_floor = new_floor
+                continue
+
+            for trade_index in range(2):
                 risk_amount = balance * risk_fraction
                 r = random.random()
 
                 if r < thresh_win:
                     pnl = risk_amount * float(reward_risk)
                     current_consec_losses = 0
+                    outcome = "full_win"
                 elif r < thresh_partial_win:
                     pnl = risk_amount * float(partial_win_r)
                     current_consec_losses = 0
+                    outcome = "partial_win"
                 elif r < thresh_be:
                     pnl = 0.0
+                    outcome = "breakeven"
                 else:
                     pnl = -risk_amount
                     current_consec_losses += 1
                     if current_consec_losses > max_consec_losses:
                         max_consec_losses = current_consec_losses
+                    outcome = "loss"
 
                 balance += pnl
 
@@ -269,6 +300,9 @@ def render_cfd_tab() -> None:
                     return True, False, balance, day, max_consec_losses
                 if balance >= target_balance:
                     return False, True, balance, day, max_consec_losses
+
+                if trade_index == 0 and outcome in ("full_win", "partial_win"):
+                    break
 
             if use_trailing and balance > peak_balance:
                 peak_balance = balance
@@ -390,7 +424,7 @@ def render_cfd_tab() -> None:
             "Breakeven trades do not reset or extend the streak."
         )
 
-        st.info("Tip: Lower risk per trade and/or fewer trades per day usually lowers ruin risk.")
+        st.info("Tip: Lower risk per trade and/or fewer setup days usually lowers ruin risk.")
 
 
 def render_futures_tab() -> None:
@@ -527,13 +561,13 @@ def render_futures_tab() -> None:
             key="futures_risk_per_trade_amount",
             disabled=futures_risk_mode != "Fixed Dollar Risk",
         )
-        futures_trades_per_day = st.number_input(
-            "Trades Per Day",
+        futures_avg_trades_per_month = st.number_input(
+            "Average Trades Per Month",
             min_value=1,
-            max_value=20,
-            value=2,
+            max_value=200,
+            value=22,
             step=1,
-            key="futures_trades_per_day",
+            key="futures_avg_trades_per_month",
         )
         futures_breakeven_rate_pct = st.number_input(
             "Breakeven Rate (%)",
@@ -556,6 +590,11 @@ def render_futures_tab() -> None:
         + (futures_partial_win_rate_pct / 100.0) * float(futures_partial_win_r)
         - (futures_loss_rate_pct / 100.0) * float(futures_avg_loss_r)
     )
+    futures_setup_day_probability, futures_expected_setup_days = estimate_setup_day_probability(
+        float(futures_avg_trades_per_month),
+        float(futures_win_rate_pct),
+        float(futures_partial_win_rate_pct),
+    )
     consistency_summary = (
         f"Consistency: on ({consistency_threshold_pct:.0f}% max one-day contribution)"
         if use_consistency_rule
@@ -575,6 +614,11 @@ def render_futures_tab() -> None:
         f"Risk/trade: **${effective_risk_amount:,.2f} ({effective_risk_pct:.2f}%)** | "
         f"{consistency_summary} | "
         f"Expected Value per trade: **{futures_ev:+.4f}R**"
+    )
+    st.caption(
+        "Daily rule model: a full win or partial win ends the day. "
+        "A first-trade breakeven or loss allows one more trade only. "
+        f"Average trades/month of **{futures_avg_trades_per_month}** implies setups on about **{futures_expected_setup_days:.1f}** trading days per month."
     )
 
     sim_col1, sim_col2 = st.columns(2)
@@ -621,7 +665,18 @@ def render_futures_tab() -> None:
         for day in range(1, int(futures_max_days) + 1):
             day_profit = 0.0
 
-            for _ in range(int(futures_trades_per_day)):
+            if random.random() > futures_setup_day_probability:
+                if futures_drawdown_mode == "Trailing EOD Equity" and balance > peak_balance:
+                    peak_balance = balance
+                    trailing_floor = peak_balance - drawdown_amount
+                    if trailing_floor > floor_balance:
+                        floor_balance = trailing_floor
+                total_profit = balance - initial_balance
+                if total_profit >= profit_target and consistency_is_met(total_profit, best_day_profit):
+                    return False, True, balance, day, total_profit, best_day_profit
+                continue
+
+            for trade_index in range(2):
                 if futures_risk_mode == "Percent of Balance":
                     risk_amount = balance * (float(futures_risk_per_trade_pct) / 100.0)
                 else:
@@ -630,12 +685,16 @@ def render_futures_tab() -> None:
 
                 if outcome < win_threshold:
                     pnl = risk_amount * float(futures_avg_win_r)
+                    outcome_type = "full_win"
                 elif outcome < partial_win_threshold:
                     pnl = risk_amount * float(futures_partial_win_r)
+                    outcome_type = "partial_win"
                 elif outcome < breakeven_threshold:
                     pnl = 0.0
+                    outcome_type = "breakeven"
                 else:
                     pnl = -risk_amount * float(futures_avg_loss_r)
+                    outcome_type = "loss"
 
                 balance += pnl
                 day_profit += pnl
@@ -649,6 +708,9 @@ def render_futures_tab() -> None:
                 if balance <= floor_balance:
                     total_profit = balance - initial_balance
                     return True, False, balance, day, total_profit, best_day_profit
+
+                if trade_index == 0 and outcome_type in ("full_win", "partial_win"):
+                    break
 
             if day_profit > best_day_profit:
                 best_day_profit = day_profit
