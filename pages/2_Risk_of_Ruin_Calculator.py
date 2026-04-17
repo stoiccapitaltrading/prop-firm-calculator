@@ -1,3 +1,4 @@
+```python
 # -*- coding: utf-8 -*-
 import random
 
@@ -11,10 +12,12 @@ BIWEEKLY_TRADING_DAYS = 10
 
 
 def days_to_weeks_months(trading_days: float) -> tuple[float, float]:
+    """Converts trading days into weeks and months."""
     return trading_days / TRADING_DAYS_PER_WEEK, trading_days / TRADING_DAYS_PER_MONTH
 
 
 def estimate_setup_day_probability(avg_trades_per_month: float, win_rate_pct: float, partial_win_rate_pct: float) -> tuple[float, float]:
+    """Estimates the probability of a trading setup occurring on any given day."""
     expected_trades_per_setup_day = 2.0 - ((win_rate_pct + partial_win_rate_pct) / 100.0)
     if expected_trades_per_setup_day <= 0:
         return 0.0, 0.0
@@ -24,6 +27,7 @@ def estimate_setup_day_probability(avg_trades_per_month: float, win_rate_pct: fl
 
 
 def payout_interval_days(frequency: str) -> int:
+    """Returns the number of trading days for a given payout frequency."""
     return {
         "Weekly": 5,
         "Biweekly": BIWEEKLY_TRADING_DAYS,
@@ -32,6 +36,7 @@ def payout_interval_days(frequency: str) -> int:
 
 
 def render_cfd_tab() -> None:
+    """Renders the CFD tab for the risk of ruin calculator."""
     st.caption("Estimate ruin risk, pass probability, and expected time-to-pass for prop-firm CFD challenges.")
 
     st.markdown(
@@ -293,6 +298,7 @@ def render_cfd_tab() -> None:
         st.caption("CFD funded payouts withdraw a percentage of any positive profit at the payout checkpoint. No payout target is required.")
 
     def simulate_phase(target_profit_pct: float, use_trailing: bool = False) -> tuple[bool, bool, float, int, int]:
+        """Simulates a single trading phase."""
         balance = float(starting_balance)
         initial_balance = float(starting_balance)
         target_balance = initial_balance * (1.0 + target_profit_pct / 100.0)
@@ -360,6 +366,7 @@ def render_cfd_tab() -> None:
         return False, False, balance, int(max_days_per_phase), max_consec_losses
 
     def simulate_challenge() -> tuple[bool, bool, bool, bool, float, int | None, int, int]:
+        """Simulates a full CFD challenge (1, 2, or 3 phases)."""
         ruined, p1_passed, bal1, p1_days, p1_consec = simulate_phase(
             target_phase_1_pct,
             use_trailing=use_eod_trailing_stop,
@@ -391,6 +398,7 @@ def render_cfd_tab() -> None:
         return False, False, True, True, bal3, None, total_days, max_consec
 
     def simulate_funded_account() -> tuple[bool, int, int | None]:
+        """Simulates a funded account run after passing a challenge."""
         balance = float(starting_balance)
         initial_balance = float(starting_balance)
         overall_floor = initial_balance * (1.0 - float(overall_drawdown_pct) / 100.0)
@@ -599,6 +607,7 @@ def render_cfd_tab() -> None:
 
 
 def render_futures_tab() -> None:
+    """Renders the Futures tab for the risk of ruin calculator."""
     st.caption("Estimate ruin risk and pass probability for a one-step futures evaluation.")
 
     st.markdown(
@@ -858,6 +867,7 @@ def render_futures_tab() -> None:
     run_futures_simulation = st.button("Run Futures Simulation", type="primary", key="futures_run_sim_button")
 
     def consistency_is_met(total_profit: float, best_day_profit: float) -> bool:
+        """Checks if the consistency rule is met."""
         if not use_consistency_rule:
             return True
         if total_profit <= 0:
@@ -865,13 +875,14 @@ def render_futures_tab() -> None:
         return best_day_profit <= total_profit * (float(consistency_threshold_pct) / 100.0)
 
     def simulate_futures_run() -> tuple[bool, bool, float, int, float, float]:
+        """Simulates a single futures evaluation run."""
         balance = float(futures_balance)
         initial_balance = float(futures_balance)
         profit_target = initial_balance * (float(futures_profit_target_pct) / 100.0)
         drawdown_amount = initial_balance * (float(futures_max_drawdown_pct) / 100.0)
         floor_balance = initial_balance - drawdown_amount
         peak_balance = initial_balance
-        max_trailing_floor = initial_balance + 100.0
+        max_trailing_floor = initial_balance + 100.0 # Ensure initial max_trailing_floor is above initial balance
 
         win_threshold = float(futures_win_rate_pct) / 100.0
         partial_win_threshold = win_threshold + float(futures_partial_win_rate_pct) / 100.0
@@ -945,12 +956,13 @@ def render_futures_tab() -> None:
         return False, False, balance, int(futures_max_days), total_profit, best_day_profit
 
     def simulate_funded_futures_run() -> tuple[bool, int, int | None]:
+        """Simulates a funded futures account run after passing evaluation."""
         balance = float(futures_balance)
         initial_balance = float(futures_balance)
         drawdown_amount = initial_balance * (float(futures_max_drawdown_pct) / 100.0)
         floor_balance = initial_balance - drawdown_amount
         peak_balance = initial_balance
-        max_trailing_floor = initial_balance + 100.0
+        max_trailing_floor = initial_balance + 100.0 # Ensure initial max_trailing_floor is above initial balance
         win_threshold = float(futures_win_rate_pct) / 100.0
         partial_win_threshold = win_threshold + float(futures_partial_win_rate_pct) / 100.0
         breakeven_threshold = partial_win_threshold + float(futures_breakeven_rate_pct) / 100.0
@@ -1168,3 +1180,4 @@ with mode_tabs[0]:
 
 with mode_tabs[1]:
     render_futures_tab()
+```
