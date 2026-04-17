@@ -11,12 +11,10 @@ BIWEEKLY_TRADING_DAYS = 10
 
 
 def days_to_weeks_months(trading_days: float) -> tuple[float, float]:
-    """Converts trading days into weeks and months."""
     return trading_days / TRADING_DAYS_PER_WEEK, trading_days / TRADING_DAYS_PER_MONTH
 
 
 def estimate_setup_day_probability(avg_trades_per_month: float, win_rate_pct: float, partial_win_rate_pct: float) -> tuple[float, float]:
-    """Estimates the probability of a trading setup occurring on any given day."""
     expected_trades_per_setup_day = 2.0 - ((win_rate_pct + partial_win_rate_pct) / 100.0)
     if expected_trades_per_setup_day <= 0:
         return 0.0, 0.0
@@ -26,7 +24,6 @@ def estimate_setup_day_probability(avg_trades_per_month: float, win_rate_pct: fl
 
 
 def payout_interval_days(frequency: str) -> int:
-    """Returns the number of trading days for a given payout frequency."""
     return {
         "Weekly": 5,
         "Biweekly": BIWEEKLY_TRADING_DAYS,
@@ -35,7 +32,6 @@ def payout_interval_days(frequency: str) -> int:
 
 
 def render_cfd_tab() -> None:
-    """Renders the CFD tab for the risk of ruin calculator."""
     st.caption("Estimate ruin risk, pass probability, and expected time-to-pass for prop-firm CFD challenges.")
 
     st.markdown(
@@ -296,8 +292,7 @@ def render_cfd_tab() -> None:
         )
         st.caption("CFD funded payouts withdraw a percentage of any positive profit at the payout checkpoint. No payout target is required.")
 
-    def simulate_phase(target_profit_pct: float, use_trailing: bool = False) -> tuple[bool, bool, float, int, int]:
-        """Simulates a single trading phase."""
+    def simulate_phase(target_profit_pct: float, use_trailing: bool = False) -> tuple[bool, bool, float, int, int, float]:
         balance = float(starting_balance)
         initial_balance = float(starting_balance)
         target_balance = initial_balance * (1.0 + target_profit_pct / 100.0)
@@ -311,6 +306,7 @@ def render_cfd_tab() -> None:
         risk_fraction = float(risk_per_trade_pct) / 100.0
         max_consec_losses = 0
         current_consec_losses = 0
+        first_payout_size = 0.0
 
         for day in range(1, int(max_days_per_phase) + 1):
             day_start_balance = balance
@@ -349,9 +345,9 @@ def render_cfd_tab() -> None:
                 balance += pnl
 
                 if balance <= overall_floor or balance <= daily_floor:
-                    return True, False, balance, day, max_consec_losses
+                    return True, False, balance, day, max_consec_losses, first_payout_size
                 if balance >= target_balance:
-                    return False, True, balance, day, max_consec_losses
+                    return False, True, balance, day, max_consec_losses, first_payout_size
 
                 if trade_index == 0 and outcome in ("full_win", "partial_win"):
                     break
@@ -362,42 +358,43 @@ def render_cfd_tab() -> None:
                 if new_floor > overall_floor:
                     overall_floor = new_floor
 
-        return False, False, balance, int(max_days_per_phase), max_consec_losses
+        return False, False, balance, int(max_days_per_phase), max_consec_losses, first_payout_size
 
-    def simulate_challenge() -> tuple[bool, bool, bool, bool, float, int | None, int, int]:
-        """Simulates a full CFD challenge (1, 2, or 3 phases)."""
-        ruined, p1_passed, bal1, p1_days, p1_consec = simulate_phase(
-            target_phase_1_pct,
-            use_trailing=use_eod_trailing_stop,
+    def simulate_challenge() -> tuple[bool, bool, bool, bool, float, int | None, int, int, float]:
+        ruined, passed, reached_p2, reached_p3, final_balance, days_to_pass, total_days, max_consec, first_payout_size = (
+            simulate_phase(
+                target_phase_1_pct,
+                use_trailing=use_eod_trailing_stop,
+            )
         )
         if ruined:
-            return True, False, False, False, bal1, None, p1_days, p1_consec
-        if not p1_passed:
-            return False, False, False, False, bal1, None, p1_days, p1_consec
+            return True, False, False, False, final_balance, None, total_days, max_consec, first_payout_size
+        if not passed:
+            return False, False, False, False, final_balance, None, total_days, max_consec, first_payout_size
         if challenge_type == "1-Phase Challenge":
-            return False, True, False, False, bal1, p1_days, p1_days, p1_consec
+            return False, True, False, False, final_balance, days_to_pass, total_days, max_consec, first_payout_size
 
-        ruined, p2_passed, bal2, p2_days, p2_consec = simulate_phase(target_phase_2_pct, use_trailing=False)
-        total_days = p1_days + p2_days
-        max_consec = max(p1_consec, p2_consec)
-        if ruined:
-            return True, False, True, False, bal2, None, total_days, max_consec
-        if not p2_passed:
-            return False, False, True, False, bal2, None, total_days, max_consec
+        ruined_p2, passed_p2, _, days_p2, consec_p2, first_payout_size_p2 = simulate_phase(target_phase_2_pct, use_trailing=False)
+        total_days = total_days + days_p2
+        max_consec = max(max_consec, consec_p2)
+        if ruined_p2:
+            return True, False, True, False, final_balance, None, total_days, max_consec, first_payout_size
+        if not passed_p2:
+            return False, False, True, False, final_balance, None, total_days, max_consec, first_payout_size
         if challenge_type == "2-Phase Challenge":
-            return False, True, True, False, bal2, total_days, total_days, max_consec
+            return False, True, True, False, final_balance, days_to_pass, total_days, max_consec, first_payout_size
 
-        ruined, p3_passed, bal3, p3_days, p3_consec = simulate_phase(target_phase_3_pct, use_trailing=False)
-        total_days = p1_days + p2_days + p3_days
-        max_consec = max(max_consec, p3_consec)
-        if ruined:
-            return True, False, True, True, bal3, None, total_days, max_consec
-        if p3_passed:
-            return False, True, True, True, bal3, total_days, total_days, max_consec
-        return False, False, True, True, bal3, None, total_days, max_consec
+        ruined_p3, passed_p3, _, days_p3, consec_p3, first_payout_size_p3 = simulate_phase(target_phase_3_pct, use_trailing=False)
+        total_days = total_days + days_p3
+        max_consec = max(max_consec, consec_p3)
+        if ruined_p3:
+            return True, False, True, True, final_balance, None, total_days, max_consec, first_payout_size
+        if passed_p3:
+            return False, True, True, True, final_balance, days_to_pass, total_days, max_consec, first_payout_size
+        return False, False, True, True, final_balance, None, total_days, max_consec, first_payout_size
 
-    def simulate_funded_account() -> tuple[bool, int, int | None]:
-        """Simulates a funded account run after passing a challenge."""
+
+    def simulate_funded_account() -> tuple[bool, int, int | None, float]:
         balance = float(starting_balance)
         initial_balance = float(starting_balance)
         overall_floor = initial_balance * (1.0 - float(overall_drawdown_pct) / 100.0)
@@ -407,6 +404,7 @@ def render_cfd_tab() -> None:
         risk_fraction = float(risk_per_trade_pct) / 100.0
         payout_hits = 0
         first_payout_day = None
+        first_payout_size = 0.0
 
         for day in range(1, int(funded_max_days) + 1):
             day_start_balance = balance
@@ -435,20 +433,21 @@ def render_cfd_tab() -> None:
                 balance += pnl
 
                 if balance <= overall_floor or balance <= daily_floor:
-                    return True, payout_hits, first_payout_day
-
+                    return True, payout_hits, first_payout_day, first_payout_size
                 if trade_index == 0 and outcome in ("full_win", "partial_win"):
                     break
 
             current_profit = balance - initial_balance
-            payout_amount = current_profit * (float(funded_payout_split_pct) / 100.0)
+            current_payout_size = current_profit * (float(funded_payout_split_pct) / 100.0)
             if day % payout_interval_days(funded_payout_frequency) == 0 and current_profit > 0:
-                balance -= payout_amount
+                if first_payout_size == 0.0:
+                    first_payout_size = current_payout_size
+                balance -= current_payout_size
                 payout_hits += 1
                 if first_payout_day is None:
                     first_payout_day = day
 
-        return False, payout_hits, first_payout_day
+        return False, payout_hits, first_payout_day, first_payout_size
 
     if st.button("Run CFD Simulation", type="primary", key="cfd_run_sim_button"):
         ruined_count = 0
@@ -462,9 +461,10 @@ def render_cfd_tab() -> None:
         funded_payout_hits: list[int] = []
         funded_first_payout_days: list[int] = []
         funded_ruin_after_pass_count = 0
+        cfd_first_payout_sizes: list[float] = []
 
         for _ in range(int(simulation_runs)):
-            ruined, passed, reached_p2, reached_p3, final_balance, days_to_pass, _total_days, max_consec = (
+            ruined, passed, reached_p2, reached_p3, final_balance, days_to_pass, _total_days, max_consec, first_payout_size = (
                 simulate_challenge()
             )
             ruined_count += int(ruined)
@@ -476,13 +476,14 @@ def render_cfd_tab() -> None:
             if days_to_pass is not None:
                 pass_days.append(int(days_to_pass))
             if enable_funded_mode and passed:
-                funded_ruined, payout_hit_count, first_payout_day = simulate_funded_account()
+                funded_ruined, payout_hit_count, first_payout_day, funded_first_payout_size = simulate_funded_account()
                 funded_ruin_after_pass_count += int(funded_ruined)
                 funded_payout_hits.append(payout_hit_count)
                 if payout_hit_count > 0:
                     funded_payout_reached_count += 1
                 if first_payout_day is not None:
                     funded_first_payout_days.append(int(first_payout_day))
+                    cfd_first_payout_sizes.append(funded_first_payout_size)
 
         risk_of_ruin = ruined_count / float(simulation_runs)
         chance_to_pass = passed_count / float(simulation_runs)
@@ -557,11 +558,19 @@ def render_cfd_tab() -> None:
             fm4.metric("Funded Ruin After Pass", f"{funded_ruin_after_pass_count / passed_count:.2%}")
 
             if funded_first_payout_days:
-                payout_weeks, payout_months = days_to_weeks_months(sum(funded_first_payout_days) / len(funded_first_payout_days))
+                avg_first_payout_days = sum(funded_first_payout_days) / len(funded_first_payout_days)
+                payout_weeks, payout_months = days_to_weeks_months(avg_first_payout_days)
                 st.success(
-                    f"Average time to first payout: **{(sum(funded_first_payout_days) / len(funded_first_payout_days)):.1f} trading days** "
+                    f"Average time to first payout: **{avg_first_payout_days:.1f} trading days** "
                     f"(~**{payout_weeks:.1f} weeks** / ~**{payout_months:.1f} months**)"
                 )
+
+            if cfd_first_payout_sizes:
+                avg_cfd_first_payout_size = sum(cfd_first_payout_sizes) / len(cfd_first_payout_sizes)
+                st.metric("Avg First Payout Size", f"${avg_cfd_first_payout_size:,.2f}")
+            else:
+                st.metric("Avg First Payout Size", "$0.00")
+
 
         cfd_summary_lines = [
             "CFD Risk of Ruin Summary",
@@ -596,6 +605,8 @@ def render_cfd_tab() -> None:
                     f"Funded ruin after pass: {funded_ruin_after_pass_count / passed_count:.2%}",
                 ]
             )
+            if cfd_first_payout_sizes:
+                cfd_summary_lines.append(f"Average first payout size: ${sum(cfd_first_payout_sizes) / len(cfd_first_payout_sizes):,.2f}")
         st.markdown("### Copyable Summary")
         st.text_area(
             "Copy this into another chat for analysis",
@@ -606,7 +617,6 @@ def render_cfd_tab() -> None:
 
 
 def render_futures_tab() -> None:
-    """Renders the Futures tab for the risk of ruin calculator."""
     st.caption("Estimate ruin risk and pass probability for a one-step futures evaluation.")
 
     st.markdown(
@@ -866,27 +876,26 @@ def render_futures_tab() -> None:
     run_futures_simulation = st.button("Run Futures Simulation", type="primary", key="futures_run_sim_button")
 
     def consistency_is_met(total_profit: float, best_day_profit: float) -> bool:
-        """Checks if the consistency rule is met."""
         if not use_consistency_rule:
             return True
         if total_profit <= 0:
             return False
         return best_day_profit <= total_profit * (float(consistency_threshold_pct) / 100.0)
 
-    def simulate_futures_run() -> tuple[bool, bool, float, int, float, float]:
-        """Simulates a single futures evaluation run."""
+    def simulate_futures_run() -> tuple[bool, bool, float, int, float, float, float]:
         balance = float(futures_balance)
         initial_balance = float(futures_balance)
         profit_target = initial_balance * (float(futures_profit_target_pct) / 100.0)
         drawdown_amount = initial_balance * (float(futures_max_drawdown_pct) / 100.0)
         floor_balance = initial_balance - drawdown_amount
         peak_balance = initial_balance
-        max_trailing_floor = initial_balance + 100.0 # Ensure initial max_trailing_floor is above initial balance
+        max_trailing_floor = initial_balance + 100.0
 
         win_threshold = float(futures_win_rate_pct) / 100.0
         partial_win_threshold = win_threshold + float(futures_partial_win_rate_pct) / 100.0
         breakeven_threshold = partial_win_threshold + float(futures_breakeven_rate_pct) / 100.0
         best_day_profit = 0.0
+        first_payout_size = 0.0
 
         for day in range(1, int(futures_max_days) + 1):
             day_profit = 0.0
@@ -899,7 +908,7 @@ def render_futures_tab() -> None:
                         floor_balance = trailing_floor
                 total_profit = balance - initial_balance
                 if total_profit >= profit_target and consistency_is_met(total_profit, best_day_profit):
-                    return False, True, balance, day, total_profit, best_day_profit
+                    return False, True, balance, day, total_profit, best_day_profit, first_payout_size
                 continue
 
             for trade_index in range(2):
@@ -933,8 +942,7 @@ def render_futures_tab() -> None:
 
                 if balance <= floor_balance:
                     total_profit = balance - initial_balance
-                    return True, False, balance, day, total_profit, best_day_profit
-
+                    return True, False, balance, day, total_profit, best_day_profit, first_payout_size
                 if trade_index == 0 and outcome_type in ("full_win", "partial_win"):
                     break
 
@@ -949,24 +957,24 @@ def render_futures_tab() -> None:
 
             total_profit = balance - initial_balance
             if total_profit >= profit_target and consistency_is_met(total_profit, best_day_profit):
-                return False, True, balance, day, total_profit, best_day_profit
+                return False, True, balance, day, total_profit, best_day_profit, first_payout_size
 
         total_profit = balance - initial_balance
-        return False, False, balance, int(futures_max_days), total_profit, best_day_profit
+        return False, False, balance, int(futures_max_days), total_profit, best_day_profit, first_payout_size
 
-    def simulate_funded_futures_run() -> tuple[bool, int, int | None]:
-        """Simulates a funded futures account run after passing evaluation."""
+    def simulate_funded_futures_run() -> tuple[bool, int, int | None, float]:
         balance = float(futures_balance)
         initial_balance = float(futures_balance)
         drawdown_amount = initial_balance * (float(futures_max_drawdown_pct) / 100.0)
         floor_balance = initial_balance - drawdown_amount
         peak_balance = initial_balance
-        max_trailing_floor = initial_balance + 100.0 # Ensure initial max_trailing_floor is above initial balance
+        max_trailing_floor = initial_balance + 100.0
         win_threshold = float(futures_win_rate_pct) / 100.0
         partial_win_threshold = win_threshold + float(futures_partial_win_rate_pct) / 100.0
         breakeven_threshold = partial_win_threshold + float(futures_breakeven_rate_pct) / 100.0
         payout_hits = 0
         first_payout_day = None
+        first_payout_size = 0.0
 
         for day in range(1, int(futures_funded_max_days) + 1):
             day_profit = 0.0
@@ -1009,7 +1017,7 @@ def render_futures_tab() -> None:
                         floor_balance = trailing_floor
 
                 if balance <= floor_balance:
-                    return True, payout_hits, first_payout_day
+                    return True, payout_hits, first_payout_day, first_payout_size
 
                 if trade_index == 0 and outcome_type in ("full_win", "partial_win"):
                     break
@@ -1020,14 +1028,17 @@ def render_futures_tab() -> None:
                 if trailing_floor > floor_balance:
                     floor_balance = trailing_floor
 
-            payout_amount = float(futures_funded_payout_target) * (float(futures_funded_payout_split_pct) / 100.0)
-            if day % payout_interval_days(futures_funded_payout_frequency) == 0 and balance - initial_balance >= float(futures_funded_payout_target):
-                balance -= payout_amount
+            current_profit = balance - initial_balance
+            current_payout_amount = float(futures_funded_payout_target) * (float(futures_funded_payout_split_pct) / 100.0)
+            if day % payout_interval_days(futures_funded_payout_frequency) == 0 and current_profit >= float(futures_funded_payout_target):
+                if first_payout_size == 0.0:
+                    first_payout_size = current_payout_amount
+                balance -= current_payout_amount
                 payout_hits += 1
                 if first_payout_day is None:
                     first_payout_day = day
 
-        return False, payout_hits, first_payout_day
+        return False, payout_hits, first_payout_day, first_payout_size
 
     if run_futures_simulation:
         ruined_count = 0
@@ -1041,9 +1052,10 @@ def render_futures_tab() -> None:
         funded_payout_hits: list[int] = []
         funded_first_payout_days: list[int] = []
         funded_ruin_after_pass_count = 0
+        futures_first_payout_sizes: list[float] = []
 
         for _ in range(int(futures_simulation_runs)):
-            ruined, passed, final_balance, days_elapsed, total_profit, best_day_profit = simulate_futures_run()
+            ruined, passed, final_balance, days_elapsed, total_profit, best_day_profit, first_payout_size = simulate_futures_run()
             ruined_count += int(ruined)
             passed_count += int(passed)
             ending_balances.append(float(final_balance))
@@ -1053,13 +1065,14 @@ def render_futures_tab() -> None:
                 passing_profits.append(float(total_profit))
                 passing_best_days.append(float(best_day_profit))
                 if futures_enable_funded_mode:
-                    funded_ruined, payout_hit_count, first_payout_day = simulate_funded_futures_run()
+                    funded_ruined, payout_hit_count, first_payout_day, funded_first_payout_size = simulate_funded_futures_run()
                     funded_ruin_after_pass_count += int(funded_ruined)
                     funded_payout_hits.append(payout_hit_count)
                     if payout_hit_count > 0:
                         funded_payout_reached_count += 1
                     if first_payout_day is not None:
                         funded_first_payout_days.append(int(first_payout_day))
+                        futures_first_payout_sizes.append(funded_first_payout_size)
 
         risk_of_ruin = ruined_count / float(futures_simulation_runs)
         chance_to_pass = passed_count / float(futures_simulation_runs)
@@ -1122,6 +1135,13 @@ def render_futures_tab() -> None:
                     f"(~**{payout_weeks:.1f} weeks** / ~**{payout_months:.1f} months**)"
                 )
 
+            if futures_first_payout_sizes:
+                avg_futures_first_payout_size = sum(futures_first_payout_sizes) / len(futures_first_payout_sizes)
+                st.metric("Avg First Payout Size", f"${avg_futures_first_payout_size:,.2f}")
+            else:
+                st.metric("Avg First Payout Size", "$0.00")
+
+
         futures_summary_lines = [
             "Futures Risk of Ruin Summary",
             f"Starting balance: ${float(futures_balance):,.2f}",
@@ -1162,6 +1182,8 @@ def render_futures_tab() -> None:
                     f"Funded ruin after pass: {funded_ruin_after_pass_count / passed_count:.2%}",
                 ]
             )
+            if futures_first_payout_sizes:
+                futures_summary_lines.append(f"Average first payout size: ${sum(futures_first_payout_sizes) / len(futures_first_payout_sizes):,.2f}")
         st.markdown("### Copyable Summary")
         st.text_area(
             "Copy this into another chat for analysis",
@@ -1179,4 +1201,3 @@ with mode_tabs[0]:
 
 with mode_tabs[1]:
     render_futures_tab()
-```
