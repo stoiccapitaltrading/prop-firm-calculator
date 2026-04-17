@@ -284,7 +284,7 @@ def render_cfd_tab() -> None:
         "Continue Passed Runs Into Funded Account",
         value=False,
         key="cfd_enable_funded_mode",
-        help="After a challenge pass, continue the same Monte Carlo run into a funded phase to estimate payout reach.",
+        help="After a challenge pass, continue the same Monte Carlo run into a funded phase **but start from a fresh balance**.",
     )
     if enable_funded_mode:
         funded_col1, funded_col2 = st.columns(2)
@@ -312,10 +312,9 @@ def render_cfd_tab() -> None:
                 key="cfd_funded_payout_frequency",
             )
         st.caption(
-            "Funded mode starts from the equity **you finished the challenge with**, keeps the same setup availability and daily‑stop rules, "
-            "and checks payout eligibility on the selected funded payout schedule from the first funded trading day."
+            "Funded mode **resets the balance back to the original starting balance** "
+            "but continues the same random‑draw sequence. The same setup‑day probability and daily‑stop rules are used."
         )
-        # The funded payout *target* is needed for the funded simulation:
         funded_payout_target = st.number_input(
             "Funded Payout Target ($)",
             min_value=100.0,
@@ -505,18 +504,18 @@ def render_cfd_tab() -> None:
         return False, False, True, True, bal, None, total_days, worst_consec, first_payout_size
 
     # ----------------------------------------------------------------------
-    #   FUNDED‑ACCOUNT simulation – now continues the SAME Monte Carlo run
+    #   FUNDED‑ACCOUNT simulation – starts from a *reset* balance
     # ----------------------------------------------------------------------
-    def simulate_funded_account(starting_balance_for_funded: float) -> tuple[bool, int, int | None, float]:
+    def simulate_funded_account() -> tuple[bool, int, int | None, float]:
         """
-        Run the funded‑account portion *continuing the same random stream*.
-        The funded run starts with the **balance the challenge finished with**.
+        Run the funded‑account portion **continuing the same random stream**,
+        but **resetting the balance to the original starting balance**.
 
         Returns:
             ruined, payout_hits, first_payout_day, first_payout_size
         """
-        balance = float(starting_balance_for_funded)          # continue from challenge end
-        initial_balance = float(starting_balance_for_funded)
+        balance = float(starting_balance)          # reset to original balance
+        initial_balance = float(starting_balance)
 
         overall_floor = initial_balance * (1.0 - float(overall_drawdown_pct) / 100.0)
 
@@ -562,7 +561,7 @@ def render_cfd_tab() -> None:
                 if trade_index == 0 and outcome_type in ("full_win", "partial_win"):
                     break
 
-            # ----- payout check (same logic as before) -----
+            # ----- payout check -----
             current_profit = balance - initial_balance
             current_payout_amount = float(funded_payout_target) * (float(funded_payout_split_pct) / 100.0)
 
@@ -588,7 +587,6 @@ def render_cfd_tab() -> None:
         ending_balances: list[float] = []
         pass_days: list[int] = []
         ending_profits: list[float] = []
-        passing_profits: list[float] = []
         funded_payout_reached_count = 0
         funded_payout_hits: list[int] = []
         funded_first_payout_days: list[int] = []
@@ -621,7 +619,7 @@ def render_cfd_tab() -> None:
                         payout_hit_count,
                         first_payout_day,
                         funded_first_payout_size,
-                    ) = simulate_funded_account(final_balance)   # continue from challenge end
+                    ) = simulate_funded_account()   # balance reset inside function
                     funded_ruin_after_pass_count += int(funded_ruined)
                     funded_payout_hits.append(payout_hit_count)
                     if payout_hit_count > 0:
@@ -708,7 +706,7 @@ def render_cfd_tab() -> None:
                 st.metric("Avg First Payout Size", "$0.00")
 
         # ------------------------------------------------------------------
-        #   Copy‑able summary (for quick export)
+        #   Copy‑able summary
         # ------------------------------------------------------------------
         summary_lines = [
             "CFD Risk of Ruin Summary",
@@ -729,11 +727,15 @@ def render_cfd_tab() -> None:
         if enable_funded_mode and passed_count > 0:
             summary_lines.extend(
                 [
-                    "Funded continuation enabled",
+                    "Funded continuation enabled (balance reset)",
                     f"Payout reach rate after pass: {funded_payout_reached_count / passed_count:.2%}",
                     f"Overall payout rate: {funded_payout_reached_count / simulation_runs:.2%}",
                 ]
             )
+            if cfd_first_payout_sizes:
+                summary_lines.append(
+                    f"Avg first payout size: ${sum(cfd_first_payout_sizes) / len(cfd_first_payout_sizes):,.2f}"
+                )
         st.markdown("### Copyable Summary")
         st.text_area(
             "Copy this into another chat for analysis",
@@ -744,7 +746,7 @@ def render_cfd_tab() -> None:
 
 
 # ----------------------------------------------------------------------
-#   FUTURES TAB (original logic – unchanged)
+#   FUTURES TAB
 # ----------------------------------------------------------------------
 def render_futures_tab() -> None:
     st.caption("Estimate ruin risk, pass probability, and expected time‑to‑pass for a one‑step futures evaluation.")
@@ -1331,7 +1333,7 @@ def render_futures_tab() -> None:
                 st.metric("Avg First Payout Size", "$0.00")
 
         # ------------------------------------------------------------------
-        #   Copy‑able summary for futures
+        #   Copy‑able summary
         # ------------------------------------------------------------------
         fut_summary = [
             "Futures Evaluation Summary",
