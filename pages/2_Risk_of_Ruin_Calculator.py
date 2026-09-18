@@ -21,6 +21,7 @@ st.set_page_config(page_title="Risk of Ruin Calculator", layout="wide")
 TRADING_DAYS_PER_WEEK = 5
 TRADING_DAYS_PER_MONTH = 21
 BIWEEKLY_TRADING_DAYS = 10
+PHASE_SIMULATION_SAFETY_MARKET_DAYS = 10_000
 
 
 def days_to_weeks_months(trading_days: float) -> tuple[float, float]:
@@ -251,6 +252,9 @@ def render_cfd_tab() -> None:
         st.stop()
 
     loss_rate_pct = 100.0 - total_non_loss_pct
+    if win_rate_pct + partial_win_rate_pct == 0 and loss_rate_pct == 0:
+        st.error("At least one profitable or losing outcome is required to simulate a phase without a deadline.")
+        st.stop()
     ev = (
         (win_rate_pct / 100.0) * float(reward_risk)
         + (partial_win_rate_pct / 100.0) * float(partial_win_r)
@@ -403,11 +407,11 @@ def render_cfd_tab() -> None:
     # ------------------------------------------------------------------
     st.markdown("### Challenge Targets & Simulation")
     if challenge_type == "3-Phase Challenge":
-        c1, c2, c2b, c3, c4 = st.columns(5)
+        c1, c2, c2b, c3 = st.columns(4)
     elif challenge_type == "2-Phase Challenge":
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3 = st.columns(3)
     else:
-        c1, c3, c4 = st.columns(3)
+        c1, c3 = st.columns(2)
 
     with c1:
         target_phase_1_pct = st.number_input(
@@ -536,15 +540,9 @@ def render_cfd_tab() -> None:
             key="cfd_simulation_runs",
             help="Use at least 20,000 runs for rare-event estimates. 100,000 is preferable when evaluating very low ruin probabilities.",
         )
-
-    with c4:
-        max_days_per_phase = st.slider(
-            "Max Trading Days (per phase)",
-            min_value=5,
-            max_value=180,
-            value=30,
-            key="cfd_max_days_per_phase",
-        )
+    st.caption(
+        "Evaluation phases have no modelled time deadline. The simulator continues until pass or drawdown breach."
+    )
 
     # ------------------------------------------------------------------
     #   Advanced options
@@ -703,7 +701,9 @@ def render_cfd_tab() -> None:
                 and qualifying_days >= required_profitable_days
             )
 
-        for day in range(1, int(max_days_per_phase) + 1):
+        day = 0
+        while day < PHASE_SIMULATION_SAFETY_MARKET_DAYS:
+            day += 1
             day_start_balance = balance
             if rng.random() > setup_day_probability:
                 if use_trailing and balance > peak_balance:
@@ -743,7 +743,7 @@ def render_cfd_tab() -> None:
             if phase_rules_met(balance, qualified_profitable_days):
                 return False, True, balance, day
 
-        return False, False, balance, int(max_days_per_phase)
+        return False, False, balance, day
 
     def simulate_challenge(outcome_probabilities: tuple[float, ...]) -> tuple[bool, bool, float, int | None]:
         """Run all configured phases and return the cumulative pass time."""
@@ -895,7 +895,7 @@ def render_cfd_tab() -> None:
         m1.metric("Risk of Ruin", f"{risk_of_ruin:.2%}")
         m2.metric("Chance to Pass", f"{chance_to_pass:.2%}")
         m3.metric("Avg Ending Balance", f"${avg_ending_balance:,.2f}")
-        m4.metric("Not Resolved by Time Limit", f"{unresolved_count / float(simulation_runs):.2%}")
+        m4.metric("Not Resolved by Safety Guard", f"{unresolved_count / float(simulation_runs):.2%}")
         st.caption(
             f"Monte Carlo sampling interval (95%) — ruin: **{ruin_interval[0]:.2%} to {ruin_interval[1]:.2%}** | "
             f"pass: **{pass_interval[0]:.2%} to {pass_interval[1]:.2%}**. "
@@ -1009,14 +1009,15 @@ def render_cfd_tab() -> None:
                 f"Second trade after first win or partial: {second_trade_after_profit_pct:.1f}%",
                 f"Outcome-rate uncertainty: {'on' if include_input_uncertainty and not use_journal_bootstrap else 'off'}",
                 f"Journal sample size: {int(journal_sample_size)}",
-                f"Max days per phase: {int(max_days_per_phase)}",
+                "Phase deadline: none",
+                f"Internal phase safety guard: {PHASE_SIMULATION_SAFETY_MARKET_DAYS:,} market days",
                 f"Simulation seed: {int(random_seed)}",
                 f"Simulation runs: {int(simulation_runs)}",
                 f"Risk of ruin: {risk_of_ruin:.2%}",
                 f"Ruin 95% simulation interval: {ruin_interval[0]:.2%} to {ruin_interval[1]:.2%}",
                 f"Chance to pass: {chance_to_pass:.2%}",
                 f"Pass 95% simulation interval: {pass_interval[0]:.2%} to {pass_interval[1]:.2%}",
-                f"Not resolved by time limit: {unresolved_count / float(simulation_runs):.2%}",
+                f"Not resolved by safety guard: {unresolved_count / float(simulation_runs):.2%}",
                 f"Avg ending balance: ${avg_ending_balance:,.2f}",
             ]
         )
