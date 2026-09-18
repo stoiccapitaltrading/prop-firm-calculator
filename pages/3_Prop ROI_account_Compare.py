@@ -1,5 +1,7 @@
 import streamlit as st
 
+from calculator_models import net_profit, return_on_cost
+
 # Configure wide page layout to maximize horizontal viewing space
 st.set_page_config(page_title="Stoic Capital Dashboard", layout="wide")
 
@@ -18,7 +20,7 @@ with col_global:
     # Pack consistency items tightly
     c_left, c_right = st.columns(2)
     with c_left:
-        consistency_pct = st.number_input("Consistency Limit (%)", value=15.0, step=1.0)
+        consistency_pct = st.number_input("Consistency Limit (%)", min_value=0.1, max_value=100.0, value=15.0, step=1.0)
     with c_right:
         best_day_r = st.number_input("Best Day Net Wins (+R)", value=1, min_value=1)
 
@@ -28,9 +30,9 @@ with col_twostep:
     # Decouple Two-Step Account Size
     ts_size, ts_cost = st.columns(2)
     with ts_size:
-        twostep_account_size = st.number_input("TS Account Size ($)", value=10000, step=1000)
+        twostep_account_size = st.number_input("TS Account Size ($)", min_value=1000, value=10000, step=1000)
     with ts_cost:
-        twostep_cost = st.number_input("Two-Step Cost ($)", value=35)
+        twostep_cost = st.number_input("Two-Step Cost ($)", min_value=1, value=35)
         
     p1, p2 = st.columns(2)
     with p1:
@@ -54,13 +56,13 @@ with col_instant:
     # Decouple Instant Account Size
     i_size, i_cost = st.columns(2)
     with i_size:
-        instant_account_size = st.number_input("Instant Account Size ($)", value=5000, step=1000)
+        instant_account_size = st.number_input("Instant Account Size ($)", min_value=1000, value=5000, step=1000)
     with i_cost:
-        instant_cost = st.number_input("Instant Cost ($)", value=84)
+        instant_cost = st.number_input("Instant Cost ($)", min_value=1, value=84)
         
     i_dd, i_buf = st.columns(2)
     with i_dd:
-        instant_drawdown_pct = st.number_input("Max Drawdown (%)", value=6.0, step=1.0)
+        instant_drawdown_pct = st.number_input("Max Drawdown (%)", min_value=0.1, max_value=100.0, value=6.0, step=1.0)
     with i_buf:
         instant_buffer_pct = st.number_input("Withdrawal Buffer (%)", value=0.0, step=1.0, help="Firms that don't reset trailing drawdown require you to leave this profit buffer in the account upon withdrawal.")
         
@@ -78,26 +80,34 @@ with col_instant:
 st.write("---")
 
 # 1. Two-Step Performance Engine
+# "Net R wins" is the strategy's total performance. Phase targets below are
+# deliberately entered in R units, not percentages.
 if target_return_r <= total_eval_pct_required:
-    twostep_net_payout = -twostep_cost
-    twostep_roi = -100.0
+    twostep_cash_received = 0.0
+    twostep_net_profit = -twostep_cost
+    twostep_roi = return_on_cost(twostep_net_profit, twostep_cost)
     twostep_status = f"Evaluating (Needs +{total_eval_pct_required - target_return_r:.1f} R)"
 else:
     funded_r_wins = target_return_r - total_eval_pct_required
     twostep_gross_funded_profit = funded_r_wins * twostep_risk_per_trade
-    # Profit split + upfront registration fee refund on first payout
-    twostep_net_payout = (twostep_gross_funded_profit * (twostep_split / 100)) + twostep_cost
-    twostep_roi = (twostep_net_payout / twostep_cost) * 100 if twostep_cost > 0 else 0
-    twostep_status = "Funded Stage Unlocked (Fee Refunded!)"
+    # Cash received includes the returned fee; net profit correctly removes
+    # the original fee once, making the comparison consistent with Instant.
+    twostep_cash_received = (
+        twostep_gross_funded_profit * (twostep_split / 100)
+    ) + twostep_cost
+    twostep_net_profit = net_profit(twostep_cash_received, twostep_cost)
+    twostep_roi = return_on_cost(twostep_net_profit, twostep_cost)
+    twostep_status = "Funded Stage Unlocked (Fee Refunded)"
 
 # 2. Instant Performance Engine with Trailing Buffer Protection
 instant_gross_profit = target_return_r * instant_risk_per_trade
 buffer_dollars = instant_account_size * (instant_buffer_pct / 100)
 
-# Calculate net withdrawable profit (keeping the lock-in buffer inside the account)
+# The buffer remains in the account and is not treated as withdrawable cash.
 withdrawable_profit = max(0.0, instant_gross_profit - buffer_dollars)
-instant_net_payout = (withdrawable_profit * (instant_split / 100)) - instant_cost
-instant_roi = (instant_net_payout / instant_cost) * 100 if instant_cost > 0 else 0
+instant_cash_received = withdrawable_profit * (instant_split / 100)
+instant_net_profit = net_profit(instant_cash_received, instant_cost)
+instant_roi = return_on_cost(instant_net_profit, instant_cost)
 
 # 3. Consistency Rule Verification
 best_day_profit = best_day_r * instant_risk_per_trade
@@ -112,18 +122,21 @@ out_ts, out_inst, out_verdict = st.columns([1, 1, 1.2], gap="medium")
 
 with out_ts:
     st.markdown(f"#### 🥈 Two-Step ({twostep_account_size/1000:,.0f}k Account)")
-    st.metric(label="Net Pocket Cash", value=f"${twostep_net_payout:,.2f}")
+    st.metric(label="Net Profit After Cost", value=f"${twostep_net_profit:,.2f}")
     st.metric(label="Return on Cost (ROI)", value=f"{twostep_roi:,.1f}%")
     st.caption(f"**Status:** {twostep_status}")
+    if twostep_cash_received > 0:
+        st.caption(f"Cash received (including fee refund): `${twostep_cash_received:,.2f}`")
 
 with out_inst:
     st.markdown(f"#### 🚀 Instant ({instant_account_size/1000:,.0f}k Account)")
-    st.metric(label="Net Pocket Cash", value=f"${instant_net_payout:,.2f}")
+    st.metric(label="Net Profit After Cost", value=f"${instant_net_profit:,.2f}")
     st.metric(label="Return on Cost (ROI)", value=f"{instant_roi:,.1f}%")
     if buffer_dollars > 0:
         st.caption(f"**Locked Buffer:** `${buffer_dollars:,.2f}` active inside account")
     else:
         st.caption("**Status:** Reset on payout (No Trailing Buffer)")
+    st.caption(f"Cash received before account cost: `${instant_cash_received:,.2f}`")
 
 with out_verdict:
     st.markdown("#### 🎯 Strategic Analysis Verdict")
