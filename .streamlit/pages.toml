@@ -7,3 +7,8 @@ icon = "💰"
 path = "pages/2_Risk_of_Ruin_Calculator.py"
 name = "Risk of Ruin Calculator"
 icon = "⚠️"
+
+[[pages]]
+path = "pages/3_Prop ROI_account_Compare.py"
+name = "Strategy & ROI Comparison"
+icon = "⚖️"
