@@ -3,6 +3,11 @@ import random
 
 import streamlit as st
 
+from calculator_models import (
+    estimate_setup_day_probability as calculate_setup_day_probability,
+    settle_profit_payout,
+)
+
 st.set_page_config(page_title="Risk of Ruin Calculator", layout="wide")
 
 TRADING_DAYS_PER_WEEK = 5
@@ -18,17 +23,13 @@ def days_to_weeks_months(trading_days: float) -> tuple[float, float]:
 def estimate_setup_day_probability(
     avg_trades_per_month: float, win_rate_pct: float, partial_win_rate_pct: float
 ) -> tuple[float, float]:
-    """Return (setup_day_probability, expected_setup_days_per_month)."""
-    expected_trades_per_setup_day = 2.0 - ((win_rate_pct + partial_win_rate_pct) / 100.0)
-    if expected_trades_per_setup_day <= 0:
-        return 0.0, 0.0
-    setup_day_probability = min(
-        avg_trades_per_month
-        / (TRADING_DAYS_PER_MONTH * expected_trades_per_setup_day),
-        1.0,
+    """Return the active-day probability aligned to the selected trade frequency."""
+    return calculate_setup_day_probability(
+        avg_trades_per_month,
+        win_rate_pct,
+        partial_win_rate_pct,
+        TRADING_DAYS_PER_MONTH,
     )
-    expected_setup_days = setup_day_probability * TRADING_DAYS_PER_MONTH
-    return setup_day_probability, expected_setup_days
 
 
 def payout_interval_days(frequency: str) -> int:
@@ -329,6 +330,15 @@ def render_cfd_tab() -> None:
         )
 
     # ------------------------------------------------------------------
+    random_seed = st.number_input(
+        "Simulation Random Seed",
+        min_value=0,
+        value=42,
+        step=1,
+        key="cfd_random_seed",
+        help="Use the same seed to reproduce a result; change it to sample a different path set.",
+    )
+
     #   Funded‑account continuation toggle (no payout target)
     # ------------------------------------------------------------------
     st.markdown("### Funded Account Continuation")
@@ -404,12 +414,13 @@ def render_cfd_tab() -> None:
         profit_day_threshold = float(min_profit_day_pct) / 100.0 * starting_balance
 
         # ----- 5️⃣  Day‑by‑day loop -----
+        trading_days_used = 0
         for day in range(1, int(max_days_per_phase) + 1):
             day_start_balance = balance
             daily_floor = day_start_balance * (1.0 - float(daily_drawdown_pct) / 100.0)
 
             # ----- 5a.  Setup‑day chance -----
-            if random.random() > setup_day_probability:
+            if rng.random() > setup_day_probability:
                 # EOD trailing‑stop handling (unchanged)
                 if use_trailing and balance > peak_balance:
                     peak_balance = balance
@@ -419,9 +430,10 @@ def render_cfd_tab() -> None:
                 continue
 
             # ----- 5b.  Up to two trades per day -----
+            trading_days_used += 1
             for trade_index in range(2):
                 risk_amount = balance * risk_fraction
-                r = random.random()
+                r = rng.random()
 
                 if r < thresh_win:
                     pnl = risk_amount * float(reward_risk)
@@ -467,7 +479,7 @@ def render_cfd_tab() -> None:
             # ----- 5f.  Check whether the phase can be considered passed -----
             if (
                 balance >= target_balance          # hit profit target
-                and day >= min_days                # satisfied minimum trading days
+                and trading_days_used >= min_days  # counts actual days with a trade
                 and (min_profit_day_pct == 0.0 or profit_day_met)  # optional profitable‑day rule
             ):
                 return False, True, balance, day, max_consec_losses, current_consec_losses
@@ -545,7 +557,7 @@ def render_cfd_tab() -> None:
     # ----------------------------------------------------------------------
     #   FUNDED‑ACCOUNT simulation – start from a *reset* balance, withdraw whatever profit
     # ----------------------------------------------------------------------
-    def simulate_funded_account() -> tuple[bool, int, int | None]:
+    def simulate_funded_account() -> tuple[bool, int, int | None, float]:
         """
         Run the funded‑account portion **continuing the same random stream**,
         but **resetting the balance to the original starting balance**.
@@ -567,17 +579,18 @@ def render_cfd_tab() -> None:
 
         payout_hits = 0
         first_payout_day = None
+        total_payout_amount = 0.0
 
         for day in range(1, int(funded_max_days) + 1):
             day_start_balance = balance
             daily_floor = day_start_balance * (1.0 - float(daily_drawdown_pct) / 100.0)
 
-            if random.random() > setup_day_probability:
+            if rng.random() > setup_day_probability:
                 continue
 
             for trade_index in range(2):
                 risk_amount = balance * risk_fraction
-                outcome = random.random()
+                outcome = rng.random()
 
                 if outcome < thresh_win:
                     pnl = risk_amount * float(reward_risk)
@@ -595,7 +608,7 @@ def render_cfd_tab() -> None:
                 balance += pnl
 
                 if balance <= overall_floor or balance <= daily_floor:
-                    return True, payout_hits, first_payout_day
+                    return True, payout_hits, first_payout_day, total_payout_amount
 
                 if trade_index == 0 and outcome_type in ("full_win", "partial_win"):
                     break
@@ -606,17 +619,21 @@ def render_cfd_tab() -> None:
                 day % payout_interval_days(funded_payout_frequency) == 0
                 and current_profit > 0
             ):
-                balance -= current_profit * (float(funded_payout_split_pct) / 100.0)
+                payout_amount, balance = settle_profit_payout(
+                    balance, initial_balance, float(funded_payout_split_pct)
+                )
+                total_payout_amount += payout_amount
                 payout_hits += 1
                 if first_payout_day is None:
                     first_payout_day = day
 
-        return False, payout_hits, first_payout_day
+        return False, payout_hits, first_payout_day, total_payout_amount
 
     # ----------------------------------------------------------------------
     #   RUN BUTTON – collect results and display them
     # ----------------------------------------------------------------------
     if st.button("Run CFD Simulation", type="primary", key="cfd_run_sim_button"):
+        rng = random.Random(int(random_seed))
         ruined_count = 0
         passed_count = 0
         ending_balances: list[float] = []
@@ -625,6 +642,7 @@ def render_cfd_tab() -> None:
         funded_payout_hits: list[int] = []
         funded_first_payout_days: list[int] = []
         funded_ruin_after_pass_count = 0
+        funded_payout_amounts: list[float] = []
 
         for _ in range(int(simulation_runs)):
             ruined, passed, final_balance, days_to_pass = simulate_challenge()
@@ -636,9 +654,10 @@ def render_cfd_tab() -> None:
             if passed:
                 pass_days.append(int(days_to_pass))
                 if enable_funded_mode:
-                    funded_ruined, payout_hit_count, first_payout_day = simulate_funded_account()
+                    funded_ruined, payout_hit_count, first_payout_day, total_payout_amount = simulate_funded_account()
                     funded_ruin_after_pass_count += int(funded_ruined)
                     funded_payout_hits.append(payout_hit_count)
+                    funded_payout_amounts.append(total_payout_amount)
                     if payout_hit_count > 0:
                         funded_payout_reached_count += 1
                     if first_payout_day is not None:
@@ -690,6 +709,10 @@ def render_cfd_tab() -> None:
             fm4.metric(
                 "Funded Ruin After Pass",
                 f"{funded_ruin_after_pass_count / passed_count:.2%}",
+            )
+            st.metric(
+                "Avg Trader Payout After Pass",
+                f"${sum(funded_payout_amounts) / passed_count:,.2f}",
             )
 
             if funded_first_payout_days:
@@ -1016,7 +1039,7 @@ def render_futures_tab() -> None:
                 else:
                     risk_amount = float(futures_risk_per_trade_amount)
 
-                r = random.random()
+                r = rng.random()
                 if r < thresh_win:
                     pnl = risk_amount * float(futures_avg_win_r)
                 elif r < thresh_partial_win:
@@ -1080,7 +1103,7 @@ def render_futures_tab() -> None:
                 else:
                     risk_amount = float(futures_risk_per_trade_amount)
 
-                r = random.random()
+                r = rng.random()
                 if r < thresh_win:
                     pnl = risk_amount * float(futures_avg_win_r)
                 elif r < thresh_partial_win:
