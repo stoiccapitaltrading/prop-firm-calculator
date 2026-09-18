@@ -130,3 +130,14 @@ def net_profit(cash_received: float, purchase_cost: float) -> float:
 def return_on_cost(net_cash_profit: float, purchase_cost: float) -> float:
     """Return ROI percentage, safely handling a missing purchase cost."""
     return (net_cash_profit / purchase_cost) * 100.0 if purchase_cost > 0 else 0.0
+
+
+def r_required_for_percentage_target(
+    account_size: float, target_pct: float, risk_per_trade: float
+) -> float:
+    """Convert an account-percentage target into R at the selected risk size."""
+    if account_size <= 0:
+        raise ValueError("Account size must be positive.")
+    if risk_per_trade <= 0:
+        raise ValueError("Risk per trade must be positive.")
+    return (account_size * (target_pct / 100.0)) / risk_per_trade

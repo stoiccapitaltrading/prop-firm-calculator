@@ -3,6 +3,7 @@ from calculator_models import (
     expected_trades_per_active_day,
     net_profit,
     percentile,
+    r_required_for_percentage_target,
     return_on_cost,
     sample_dirichlet_probabilities,
     settle_profit_payout,
@@ -53,3 +54,8 @@ def test_roi_uses_net_profit_after_cost():
     profit = net_profit(cash_received=1_035, purchase_cost=35)
     assert profit == 1_000
     assert return_on_cost(profit, 35) == (1_000 / 35) * 100
+
+
+def test_percentage_phase_targets_convert_to_r_at_evaluation_risk():
+    assert r_required_for_percentage_target(50_000, 8, 1_000) == 4
+    assert r_required_for_percentage_target(50_000, 5, 1_000) == 2.5

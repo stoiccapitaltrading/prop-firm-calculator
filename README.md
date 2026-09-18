@@ -6,7 +6,7 @@ A Streamlit decision-support app for prop-firm traders.
 
 - **Payout Calculator** — converts a projected USD payout into a selected currency using hourly exchange rates.
 - **Risk of Ruin Calculator** — Monte Carlo models for CFD and futures evaluations, including pass probability, drawdown failure and optional funded-account continuation.
-- **Strategy & ROI Comparison** — compares two-step and instant accounts using the same net-profit-after-cost basis.
+- **Strategy & ROI Comparison** — compares two-step and instant accounts using the same net-profit-after-cost basis, percentage-based phase targets, and separate evaluation and funded-stage risk sizing.
 
 ## Important modelling assumptions
 
