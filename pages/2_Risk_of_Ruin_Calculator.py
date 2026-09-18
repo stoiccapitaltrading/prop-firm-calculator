@@ -917,6 +917,14 @@ def render_futures_tab() -> None:
         step=1,
         key="futures_avg_trades_per_month",
     )
+    futures_random_seed = st.number_input(
+        "Simulation Random Seed",
+        min_value=0,
+        value=42,
+        step=1,
+        key="futures_random_seed",
+        help="Use the same seed to reproduce a result; change it to sample a different path set.",
+    )
 
     # ------------------------------------------------------------------
     #   Validation
@@ -944,6 +952,15 @@ def render_futures_tab() -> None:
         f"BE: **{futures_breakeven_rate_pct:.2f}%** | "
         f"Loss: **{futures_loss_rate_pct:.2f}%** @ -{futures_avg_loss_r:.2f}R | "
         f"Expected Value per trade: **{futures_ev:+.4f}R**"
+    )
+    futures_setup_day_probability, futures_expected_setup_days = estimate_setup_day_probability(
+        float(futures_avg_trades_per_month),
+        float(futures_win_rate_pct),
+        float(futures_partial_win_rate_pct),
+    )
+    st.caption(
+        f"Trade-frequency model: about **{futures_expected_setup_days:.1f}** active days per month "
+        f"to target **{int(futures_avg_trades_per_month)}** trades."
     )
 
     # ------------------------------------------------------------------
@@ -1031,9 +1048,10 @@ def render_futures_tab() -> None:
 
         for day in range(1, int(futures_max_days) + 1):
             day_start_balance = balance
-            num_trades = random.randint(0, 3)
+            if rng.random() > futures_setup_day_probability:
+                continue
 
-            for _ in range(num_trades):
+            for trade_index in range(2):
                 if futures_risk_mode == "Percent of Balance":
                     risk_amount = balance * (float(futures_risk_per_trade_pct) / 100.0)
                 else:
@@ -1053,6 +1071,8 @@ def render_futures_tab() -> None:
 
                 if balance <= floor_balance:
                     return True, False, balance, day, balance - initial_balance, best_day_profit
+                if trade_index == 0 and r < thresh_partial_win:
+                    break
 
             day_profit = balance - day_start_balance
             if day_profit > best_day_profit:
@@ -1070,7 +1090,7 @@ def render_futures_tab() -> None:
     # ----------------------------------------------------------------------
     #   FUTURES FUNDED ACCOUNT
     # ----------------------------------------------------------------------
-    def simulate_funded_futures_run() -> tuple[bool, int, int | None]:
+    def simulate_funded_futures_run() -> tuple[bool, int, int | None, float]:
         """
         Simulate funded account continuation for futures.
 
@@ -1093,11 +1113,13 @@ def render_futures_tab() -> None:
 
         payout_hits = 0
         first_payout_day = None
+        total_payout_amount = 0.0
 
         for day in range(1, int(futures_funded_max_days) + 1):
-            num_trades = random.randint(0, 3)
+            if rng.random() > futures_setup_day_probability:
+                continue
 
-            for _ in range(num_trades):
+            for trade_index in range(2):
                 if futures_risk_mode == "Percent of Balance":
                     risk_amount = balance * (float(futures_risk_per_trade_pct) / 100.0)
                 else:
@@ -1116,7 +1138,9 @@ def render_futures_tab() -> None:
                 balance += pnl
 
                 if balance <= floor_balance:
-                    return True, payout_hits, first_payout_day
+                    return True, payout_hits, first_payout_day, total_payout_amount
+                if trade_index == 0 and r < thresh_partial_win:
+                    break
 
             if futures_drawdown_mode == "Trailing" and balance > peak_balance:
                 peak_balance = balance
@@ -1128,20 +1152,21 @@ def render_futures_tab() -> None:
                 day % payout_interval_days(futures_funded_payout_frequency) == 0
                 and current_profit > 0
             ):
-                current_payout_amount = current_profit * (
-                    float(futures_funded_payout_split_pct) / 100.0
+                current_payout_amount, balance = settle_profit_payout(
+                    balance, initial_balance, float(futures_funded_payout_split_pct)
                 )
-                balance -= current_payout_amount
+                total_payout_amount += current_payout_amount
                 payout_hits += 1
                 if first_payout_day is None:
                     first_payout_day = day
 
-        return False, payout_hits, first_payout_day
+        return False, payout_hits, first_payout_day, total_payout_amount
 
     # ------------------------------------------------------------------
     #   Run futures simulation
     # ------------------------------------------------------------------
     if st.button("Run Futures Simulation", type="primary", key="futures_run_sim_button"):
+        rng = random.Random(int(futures_random_seed))
         ruined_count = 0
         passed_count = 0
         ending_balances: list[float] = []
@@ -1151,6 +1176,7 @@ def render_futures_tab() -> None:
         funded_payout_hits: list[int] = []
         funded_first_payout_days: list[int] = []
         funded_ruin_after_pass_count = 0
+        funded_payout_amounts: list[float] = []
 
         for _ in range(int(futures_simulation_runs)):
             ruined, passed, final_balance, days_elapsed, total_profit, best_day_profit = simulate_futures_run()
@@ -1162,9 +1188,10 @@ def render_futures_tab() -> None:
                 passing_profits.append(float(total_profit))
                 passing_best_days.append(float(best_day_profit))
                 if futures_enable_funded_mode:
-                    funded_ruined, payout_hit_count, first_payout_day = simulate_funded_futures_run()
+                    funded_ruined, payout_hit_count, first_payout_day, total_payout_amount = simulate_funded_futures_run()
                     funded_ruin_after_pass_count += int(funded_ruined)
                     funded_payout_hits.append(payout_hit_count)
+                    funded_payout_amounts.append(total_payout_amount)
                     if payout_hit_count > 0:
                         funded_payout_reached_count += 1
                     if first_payout_day is not None:
@@ -1221,6 +1248,10 @@ def render_futures_tab() -> None:
             fm4.metric(
                 "Funded Ruin After Pass",
                 f"{funded_ruin_after_pass_count / passed_count:.2%}",
+            )
+            st.metric(
+                "Avg Trader Payout After Pass",
+                f"${sum(funded_payout_amounts) / passed_count:,.2f}",
             )
 
             if funded_first_payout_days:
